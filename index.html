@@ -1,0 +1,1323 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>PitStop Facturatie</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0a0c10; --bg2:#111318; --bg3:#1a1d25; --card:#13161e;
+  --border:#252836; --accent:#f97316; --accent2:#fb923c;
+  --blue:#3b82f6; --green:#10b981; --red:#ef4444;
+  --text:#e8eaf0; --text2:#8b91a7; --text3:#555c75; --nav-h:64px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;}
+
+/* ── AUTH SCREEN ── */
+#authScreen {
+  min-height:100vh; display:flex; align-items:center; justify-content:center;
+  background: radial-gradient(ellipse at 60% 20%, rgba(249,115,22,0.08) 0%, transparent 60%),
+              radial-gradient(ellipse at 10% 80%, rgba(59,130,246,0.06) 0%, transparent 50%), var(--bg);
+  padding:20px;
+}
+.auth-box {
+  background:var(--card); border:1px solid var(--border); border-radius:20px;
+  padding:40px 36px; width:100%; max-width:420px;
+  box-shadow:0 24px 80px rgba(0,0,0,0.5);
+}
+.auth-logo { font-family:'Rajdhani',sans-serif; font-size:28px; font-weight:700; color:var(--accent); margin-bottom:4px; }
+.auth-sub  { font-size:12px; color:var(--text3); letter-spacing:2px; text-transform:uppercase; margin-bottom:32px; }
+.auth-tabs { display:flex; gap:4px; margin-bottom:28px; background:var(--bg2); border-radius:10px; padding:4px; }
+.auth-tab  {
+  flex:1; padding:9px; border:none; background:transparent; color:var(--text3);
+  font-family:'DM Sans',sans-serif; font-size:14px; font-weight:600; border-radius:8px; cursor:pointer; transition:all 0.2s;
+}
+.auth-tab.active{ background:var(--card); color:var(--text); box-shadow:0 2px 8px rgba(0,0,0,0.3); }
+.auth-form { display:flex; flex-direction:column; gap:14px; }
+.auth-form input {
+  background:var(--bg2); border:1px solid var(--border); border-radius:10px;
+  padding:13px 16px; color:var(--text); font-family:'DM Sans',sans-serif; font-size:16px;
+  outline:none; transition:border-color 0.2s;
+}
+.auth-form input:focus { border-color:var(--accent); }
+.auth-form input::placeholder { color:var(--text3); }
+.btn-auth {
+  background:var(--accent); color:white; border:none; border-radius:10px;
+  padding:14px; font-family:'DM Sans',sans-serif; font-size:15px; font-weight:700;
+  cursor:pointer; transition:all 0.2s; margin-top:4px;
+}
+.btn-auth:hover { background:var(--accent2); transform:translateY(-1px); box-shadow:0 6px 20px rgba(249,115,22,0.3); }
+.auth-err { background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3); border-radius:8px; padding:10px 14px; font-size:13px; color:#fca5a5; display:none; }
+.auth-err.show { display:block; }
+
+/* ── APP LAYOUT ── */
+#app { display:none; }
+#app.show { display:block; }
+
+/* SIDEBAR */
+.sidebar {
+  position:fixed; left:0; top:0; bottom:0; width:220px;
+  background:var(--card); border-right:1px solid var(--border);
+  display:flex; flex-direction:column; z-index:100;
+}
+.logo { padding:24px 20px 18px; border-bottom:1px solid var(--border); }
+.logo-title { font-family:'Rajdhani',sans-serif; font-size:20px; font-weight:700; color:var(--accent); }
+.logo-sub { font-size:10px; color:var(--text3); letter-spacing:2px; text-transform:uppercase; margin-top:3px; }
+.logo-user { font-size:12px; color:var(--text2); margin-top:10px; display:flex; align-items:center; gap:8px; }
+.logo-user span { background:var(--accent); color:white; border-radius:50%; width:24px; height:24px; display:inline-flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; flex-shrink:0; }
+.nav-section { padding:14px 10px; flex:1; overflow-y:auto; }
+.nav-label { font-size:10px; letter-spacing:2px; text-transform:uppercase; color:var(--text3); padding:4px 10px 8px; }
+.nav-btn {
+  display:flex; align-items:center; gap:10px; width:100%; padding:10px 12px;
+  border:none; background:transparent; color:var(--text2); font-family:'DM Sans',sans-serif;
+  font-size:14px; font-weight:500; border-radius:8px; cursor:pointer; text-align:left;
+  transition:all 0.2s; margin-bottom:2px;
+}
+.nav-btn:hover { background:var(--bg3); color:var(--text); }
+.nav-btn.active { background:rgba(249,115,22,0.15); color:var(--accent); }
+.nav-btn .icon { font-size:16px; width:20px; text-align:center; }
+.nav-bottom { padding:14px 10px; border-top:1px solid var(--border); }
+.btn-logout {
+  display:flex; align-items:center; gap:8px; width:100%; padding:10px 12px;
+  border:none; background:rgba(239,68,68,0.08); color:var(--red);
+  font-family:'DM Sans',sans-serif; font-size:13px; font-weight:600;
+  border-radius:8px; cursor:pointer; transition:all 0.2s;
+}
+.btn-logout:hover { background:rgba(239,68,68,0.18); }
+
+/* BOTTOM NAV (mobile) */
+.bottom-nav {
+  display:none; position:fixed; bottom:0; left:0; right:0;
+  height:var(--nav-h); background:var(--card); border-top:1px solid var(--border);
+  z-index:200; justify-content:space-around; align-items:stretch;
+}
+.bottom-nav button {
+  flex:1; border:none; background:transparent; color:var(--text3);
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:3px; font-family:'DM Sans',sans-serif; font-size:10px; font-weight:600;
+  cursor:pointer; transition:color 0.2s; padding:8px 2px; -webkit-tap-highlight-color:transparent;
+}
+.bottom-nav button .bn-icon { font-size:20px; line-height:1; }
+.bottom-nav button.active { color:var(--accent); }
+
+/* MAIN */
+.main { margin-left:220px; min-height:100vh; padding:28px 32px; }
+
+/* LOADING */
+.loading { display:flex; align-items:center; justify-content:center; padding:60px; flex-direction:column; gap:14px; color:var(--text3); }
+.spinner { width:28px; height:28px; border:3px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin 0.7s linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
+
+/* SECTIONS */
+section{display:none;}
+section.active{display:block;animation:fadeIn 0.3s ease;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
+
+/* PAGE HEADER */
+.page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:10px;}
+.page-title{font-family:'Rajdhani',sans-serif;font-size:28px;font-weight:700;letter-spacing:0.5px;}
+.page-title span{color:var(--accent);}
+
+/* CARDS */
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px 22px;margin-bottom:16px;}
+.card-title{font-family:'Rajdhani',sans-serif;font-size:14px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);margin-bottom:16px;}
+
+/* STATS */
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;position:relative;overflow:hidden;}
+.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--accent);border-radius:14px 14px 0 0;}
+.stat-card.blue::before{background:var(--blue);}
+.stat-card.green::before{background:var(--green);}
+.stat-card.red::before{background:var(--red);}
+.stat-label{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--text3);margin-bottom:8px;}
+.stat-value{font-family:'Rajdhani',sans-serif;font-size:28px;font-weight:700;color:var(--text);}
+.stat-value small{font-size:16px;color:var(--text2);}
+
+/* FORMS */
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+.form-grid-3{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;}
+.form-group{margin-bottom:12px;}
+.form-group label{display:block;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);margin-bottom:6px;font-weight:600;}
+input,textarea,select{
+  width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:8px;
+  padding:11px 14px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:16px;
+  outline:none;transition:border-color 0.2s,box-shadow 0.2s;-webkit-appearance:none;
+}
+input:focus,textarea:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(249,115,22,0.1);}
+select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238b91a7' d='M6 8L1 3h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:32px;}
+select option{background:var(--bg2);}
+textarea{resize:vertical;min-height:80px;font-size:14px;}
+.postcode-row{display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end;}
+
+/* BUTTONS */
+.btn{border:none;border-radius:8px;padding:11px 18px;cursor:pointer;font-family:'DM Sans',sans-serif;font-weight:600;font-size:14px;transition:all 0.2s;display:inline-flex;align-items:center;gap:7px;-webkit-tap-highlight-color:transparent;touch-action:manipulation;}
+.btn-primary{background:var(--accent);color:white;}
+.btn-primary:hover{background:var(--accent2);transform:translateY(-1px);box-shadow:0 4px 14px rgba(249,115,22,0.3);}
+.btn-blue{background:var(--blue);color:white;}
+.btn-blue:hover{background:#2563eb;transform:translateY(-1px);}
+.btn-ghost{background:var(--bg3);color:var(--text2);border:1px solid var(--border);}
+.btn-ghost:hover{background:var(--bg2);color:var(--text);}
+.btn-danger{background:rgba(239,68,68,0.12);color:var(--red);border:1px solid rgba(239,68,68,0.2);}
+.btn-danger:hover{background:rgba(239,68,68,0.22);}
+.btn-green{background:rgba(16,185,129,0.12);color:var(--green);border:1px solid rgba(16,185,129,0.2);}
+.btn-green:hover{background:rgba(16,185,129,0.22);}
+.btn-sm{padding:6px 12px;font-size:12px;border-radius:6px;}
+.btn-full{width:100%;justify-content:center;padding:13px;}
+
+/* TYPE SELECTOR */
+.type-selector{display:flex;gap:12px;}
+.type-btn{flex:1;padding:16px 12px;background:var(--bg2);border:2px solid var(--border);border-radius:12px;color:var(--text2);font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;cursor:pointer;transition:all 0.2s;text-align:center;-webkit-tap-highlight-color:transparent;}
+.type-btn.selected{border-color:var(--accent);background:rgba(249,115,22,0.1);color:var(--accent);}
+.type-icon{font-size:24px;display:block;margin-bottom:5px;}
+
+/* TABLES */
+.table-wrap{overflow-x:auto;border-radius:10px;border:1px solid var(--border);-webkit-overflow-scrolling:touch;}
+table{width:100%;border-collapse:collapse;font-size:14px;}
+th{background:var(--bg2);padding:11px 14px;text-align:left;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);font-weight:600;border-bottom:1px solid var(--border);white-space:nowrap;}
+td{padding:12px 14px;border-bottom:1px solid var(--border);color:var(--text2);}
+tr:last-child td{border-bottom:none;}
+@media(hover:hover){tr:hover td{background:rgba(255,255,255,0.02);}}
+.badge{display:inline-block;padding:3px 8px;border-radius:20px;font-size:10px;font-weight:600;white-space:nowrap;}
+.badge-auto{background:rgba(59,130,246,0.15);color:#60a5fa;}
+.badge-dienst{background:rgba(16,185,129,0.15);color:#34d399;}
+.badge-marge{background:rgba(249,115,22,0.15);color:var(--accent);}
+.row-actions{display:flex;gap:6px;flex-wrap:wrap;}
+
+/* LINES TABLE */
+.lines-table{width:100%;border-collapse:collapse;margin-top:12px;}
+.lines-table th{background:var(--bg3);padding:9px 10px;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--text3);font-weight:600;white-space:nowrap;}
+.lines-table td{padding:10px 10px;border-bottom:1px solid var(--border);font-size:13px;color:var(--text2);}
+
+/* TOTALS */
+.totals-block{margin-top:16px;display:flex;flex-direction:column;align-items:flex-end;gap:4px;}
+.totals-row{display:flex;gap:24px;font-size:14px;color:var(--text2);}
+.totals-row.final{font-family:'Rajdhani',sans-serif;font-size:22px;font-weight:700;color:var(--accent);}
+.totals-divider{height:1px;background:var(--border);width:280px;margin:4px 0;}
+
+/* DIVIDER */
+.divider{height:1px;background:var(--border);margin:16px 0;}
+
+/* RECENT */
+.recent-item{display:flex;align-items:center;justify-content:space-between;padding:13px 0;border-bottom:1px solid var(--border);gap:8px;}
+.recent-item:last-child{border-bottom:none;}
+.recent-nr{font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--accent);font-size:14px;}
+.recent-klant{font-weight:500;color:var(--text);font-size:14px;}
+.recent-sub{font-size:11px;color:var(--text3);margin-top:2px;}
+.recent-amount{font-family:'Rajdhani',sans-serif;font-size:18px;font-weight:700;color:var(--text);white-space:nowrap;}
+
+/* EMPTY */
+.empty{text-align:center;padding:48px 20px;color:var(--text3);}
+.empty-icon{font-size:36px;margin-bottom:10px;}
+.empty-text{font-size:14px;}
+
+/* TOAST */
+#toast{position:fixed;bottom:80px;right:16px;background:var(--card);border:1px solid var(--border);border-left:4px solid var(--green);padding:12px 18px;border-radius:10px;font-size:14px;color:var(--text);z-index:9999;transform:translateX(140%);transition:transform 0.35s cubic-bezier(.34,1.56,.64,1);box-shadow:0 8px 30px rgba(0,0,0,0.4);max-width:280px;}
+#toast.show{transform:translateX(0);}
+#toast.error{border-left-color:var(--red);}
+
+/* MODAL */
+.modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:500;align-items:flex-end;justify-content:center;backdrop-filter:blur(2px);}
+.modal-backdrop.open{display:flex;}
+.modal{background:var(--card);border:1px solid var(--border);border-radius:20px 20px 0 0;width:100%;max-width:560px;padding:22px 20px 30px;max-height:90vh;overflow-y:auto;animation:slideUp 0.3s cubic-bezier(.34,1.1,.64,1);}
+@keyframes slideUp{from{transform:translateY(100%);}to{transform:translateY(0);}}
+.modal-handle{width:40px;height:4px;background:var(--border);border-radius:4px;margin:0 auto 16px;}
+.modal-title{font-family:'Rajdhani',sans-serif;font-size:20px;font-weight:700;color:var(--text);margin-bottom:16px;}
+.modal-actions{display:flex;gap:10px;margin-top:16px;}
+.modal-actions .btn{flex:1;justify-content:center;}
+
+/* INSTELLINGEN */
+.sett-section{margin-bottom:24px;}
+.sett-section h3{font-family:'Rajdhani',sans-serif;font-size:17px;font-weight:700;letter-spacing:1px;color:var(--text);margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--border);}
+
+/* KENTEKEN */
+.kenteken-display{font-family:'Rajdhani',sans-serif;font-size:15px;font-weight:700;letter-spacing:1px;color:var(--text);}
+
+/* SCROLLBAR */
+::-webkit-scrollbar{width:4px;height:4px;}
+::-webkit-scrollbar-track{background:var(--bg);}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:10px;}
+
+/* ── MOBILE ── */
+@media(max-width:768px){
+  .sidebar{display:none;}
+  .bottom-nav{display:flex;}
+  .main{margin-left:0;padding:14px 13px;padding-bottom:calc(var(--nav-h) + 14px);}
+  .page-title{font-size:22px;}
+  .stats-grid{grid-template-columns:1fr 1fr;gap:10px;}
+  .stat-value{font-size:22px;}
+  .form-grid{grid-template-columns:1fr;}
+  .form-grid-3{grid-template-columns:1fr 1fr;gap:10px;}
+  #factuur .form-grid{grid-template-columns:1fr;}
+  .postcode-row{grid-template-columns:1fr 1fr;}
+  .postcode-row .btn{grid-column:1/-1;}
+  .type-selector{gap:8px;}
+  .type-icon{font-size:20px;}
+  .type-btn{font-size:13px;padding:12px 8px;}
+  .lines-table th:nth-child(3),.lines-table th:nth-child(5),.lines-table td:nth-child(3),.lines-table td:nth-child(5){display:none;}
+  #factuurTabel th:nth-child(3),#factuurTabel th:nth-child(4),#factuurTabel td:nth-child(3),#factuurTabel td:nth-child(4){display:none;}
+  #klantenTabel th:nth-child(2),#klantenTabel th:nth-child(3),#klantenTabel td:nth-child(2),#klantenTabel td:nth-child(3){display:none;}
+  .card{padding:14px 13px;}
+  #toast{bottom:calc(var(--nav-h) + 10px);}
+  #factuur .page-header{flex-direction:column;align-items:stretch;}
+  #factuur .page-header .btn{width:100%;justify-content:center;}
+  .totals-divider{width:100%;}
+}
+@media(max-width:420px){
+  .type-selector{flex-direction:column;}
+  .form-grid-3{grid-template-columns:1fr 1fr;}
+}
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════
+     CONFIG — Vul hier je Supabase gegevens in
+═══════════════════════════════════════════ -->
+<script>
+  // !! VERVANG DEZE WAARDEN MET JOUW SUPABASE GEGEVENS !!
+  // Te vinden op: https://supabase.com → jouw project → Settings → API
+  const SUPABASE_URL  = 'https://kgtnedygwjgcnoqzdjbr.supabase.co';
+  const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtndG5lZHlnd2pnY25vcXpkamJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMwOTYwMDMsImV4cCI6MjA4ODY3MjAwM30.yZCOngIu3E-mJ866ykiRC8r4YRX-RnowrbkgAPWoPfg';
+</script>
+
+<!-- ══ AUTH SCHERM ══ -->
+<div id="authScreen">
+  <div class="auth-box">
+    <div class="auth-logo">🏁 PitStop</div>
+    <div class="auth-sub">Facturatie</div>
+
+    <div class="auth-tabs">
+      <button class="auth-tab active" onclick="toonAuthTab('login')">Inloggen</button>
+      <button class="auth-tab" onclick="toonAuthTab('register')">Registreren</button>
+    </div>
+
+    <!-- LOGIN -->
+    <div id="loginForm" class="auth-form">
+      <input type="email" id="loginEmail" placeholder="E-mailadres" autocomplete="email">
+      <input type="password" id="loginPass" placeholder="Wachtwoord" autocomplete="current-password">
+      <div class="auth-err" id="loginErr"></div>
+      <button class="btn-auth" onclick="inloggen()">Inloggen →</button>
+      <button style="background:none;border:none;color:var(--text3);font-size:12px;cursor:pointer;text-align:center;padding:4px;" onclick="wachtwoordVergeten()">Wachtwoord vergeten?</button>
+    </div>
+
+    <!-- REGISTER -->
+    <div id="registerForm" class="auth-form" style="display:none">
+      <input type="text"  id="regBedrijf" placeholder="Bedrijfsnaam" autocomplete="organization">
+      <input type="email" id="regEmail"   placeholder="E-mailadres" autocomplete="email">
+      <input type="password" id="regPass" placeholder="Wachtwoord (min. 6 tekens)" autocomplete="new-password">
+      <div class="auth-err" id="regErr"></div>
+      <button class="btn-auth" onclick="registreren()">Aanmelden →</button>
+    </div>
+
+    <!-- WACHT OP GOEDKEURING -->
+    <div id="wachtScherm" style="display:none;text-align:center;padding:10px 0">
+      <div style="font-size:44px;margin-bottom:14px">⏳</div>
+      <div style="font-family:'Rajdhani',sans-serif;font-size:20px;font-weight:700;color:var(--text);margin-bottom:10px">Aanvraag ontvangen</div>
+      <div style="font-size:13px;color:var(--text3);line-height:1.7;margin-bottom:22px">
+        Je account wacht op goedkeuring van de beheerder.<br>
+        Je ontvangt een e-mail zodra je toegang hebt.
+      </div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;font-size:12px;color:var(--text3);margin-bottom:20px">
+        💡 Heb je al eerder een aanvraag ingediend en goedkeuring ontvangen?
+        <br>Probeer dan opnieuw in te loggen.
+      </div>
+      <button style="background:none;border:1px solid var(--border);color:var(--text2);border-radius:8px;padding:9px 18px;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:13px;" onclick="toonAuthTab('login')">← Terug naar inloggen</button>
+    </div>
+
+    <!-- GEWEIGERD -->
+    <div id="geweigerdScherm" style="display:none;text-align:center;padding:10px 0">
+      <div style="font-size:44px;margin-bottom:14px">🚫</div>
+      <div style="font-family:'Rajdhani',sans-serif;font-size:20px;font-weight:700;color:var(--red);margin-bottom:10px">Toegang geweigerd</div>
+      <div style="font-size:13px;color:var(--text3);line-height:1.7;margin-bottom:22px">Je aanvraag is geweigerd door de beheerder. Neem contact op als je denkt dat dit een fout is.</div>
+      <button style="background:none;border:1px solid var(--border);color:var(--text2);border-radius:8px;padding:9px 18px;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:13px;" onclick="uitloggen()">Uitloggen</button>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══ ADMIN PANEEL ══ -->
+<div id="adminApp" style="display:none">
+  <div style="min-height:100vh;background:var(--bg);padding:30px 20px;max-width:800px;margin:0 auto">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;flex-wrap:wrap;gap:12px">
+      <div>
+        <div style="font-family:'Rajdhani',sans-serif;font-size:26px;font-weight:700;color:var(--accent)">🏁 PitStop Admin</div>
+        <div style="font-size:12px;color:var(--text3);letter-spacing:1px;margin-top:2px">Gebruikersbeheer</div>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="uitloggen()">🚪 Uitloggen</button>
+    </div>
+
+    <!-- STATS BALK -->
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:24px">
+      <div class="stat-card"><div class="stat-label">Wachtend</div><div class="stat-value" id="adminStatWacht" style="color:var(--accent)">0</div></div>
+      <div class="stat-card green"><div class="stat-label">Goedgekeurd</div><div class="stat-value" id="adminStatGoed">0</div></div>
+      <div class="stat-card red"><div class="stat-label">Geweigerd</div><div class="stat-value" id="adminStatWeig">0</div></div>
+    </div>
+
+    <!-- FILTER TABS -->
+    <div style="display:flex;gap:6px;margin-bottom:16px">
+      <button class="btn btn-sm" id="filterBtn-wachtend"   onclick="filterAdmin('wachtend')"   style="background:rgba(249,115,22,0.15);color:var(--accent);border:1px solid rgba(249,115,22,0.3)">⏳ Wachtend</button>
+      <button class="btn btn-ghost btn-sm" id="filterBtn-goedgekeurd" onclick="filterAdmin('goedgekeurd')">✅ Goedgekeurd</button>
+      <button class="btn btn-ghost btn-sm" id="filterBtn-geweigerd"   onclick="filterAdmin('geweigerd')">🚫 Geweigerd</button>
+      <button class="btn btn-ghost btn-sm" id="filterBtn-alles"       onclick="filterAdmin('alles')">📋 Alles</button>
+    </div>
+
+    <div class="card" style="padding:0">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Bedrijf</th><th>E-mail</th><th>Aangevraagd</th><th>Status</th><th>Actie</th></tr></thead>
+          <tbody id="adminTabel"><tr><td colspan="5"><div class="loading"><div class="spinner"></div></div></td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div style="margin-top:24px;padding:16px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;font-size:12px;color:var(--text3);line-height:1.7">
+      <strong style="color:var(--text2)">💡 Tip:</strong> Stuur goedgekeurde gebruikers een e-mail zodat ze weten dat ze kunnen inloggen.
+      Supabase stuurt geen automatische notificatie bij goedkeuring.
+    </div>
+  </div>
+</div>
+
+<!-- ══ HOOFD APP ══ -->
+<div id="app">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="logo">
+      <div class="logo-title">🏁 PitStop</div>
+      <div class="logo-sub">Facturatie</div>
+      <div class="logo-user"><span id="avatarLetter">?</span><span id="sidebarEmail" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:150px"></span></div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">Menu</div>
+      <button class="nav-btn active" onclick="showTab('dashboard')"><span class="icon">📊</span> Dashboard</button>
+      <button class="nav-btn" onclick="showTab('factuur')"><span class="icon">➕</span> Nieuwe Factuur</button>
+      <button class="nav-btn" onclick="showTab('facturen')"><span class="icon">📄</span> Facturen</button>
+      <button class="nav-btn" onclick="showTab('klanten')"><span class="icon">👥</span> Klanten</button>
+      <button class="nav-btn" onclick="showTab('producten')"><span class="icon">🔧</span> Producten</button>
+      <div class="nav-label" style="margin-top:10px">Systeem</div>
+      <button class="nav-btn" onclick="showTab('instellingen')"><span class="icon">⚙️</span> Instellingen</button>
+    </div>
+    <div class="nav-bottom">
+      <button class="btn-logout" onclick="uitloggen()">🚪 Uitloggen</button>
+    </div>
+  </div>
+
+  <!-- BOTTOM NAV -->
+  <nav class="bottom-nav">
+    <button onclick="showTab('dashboard')"    id="bn-dashboard"    class="active"><span class="bn-icon">📊</span>Home</button>
+    <button onclick="showTab('factuur')"      id="bn-factuur"             ><span class="bn-icon">➕</span>Nieuw</button>
+    <button onclick="showTab('facturen')"     id="bn-facturen"            ><span class="bn-icon">📄</span>Facturen</button>
+    <button onclick="showTab('klanten')"      id="bn-klanten"             ><span class="bn-icon">👥</span>Klanten</button>
+    <button onclick="showTab('instellingen')" id="bn-instellingen"        ><span class="bn-icon">⚙️</span>Meer</button>
+  </nav>
+
+  <div class="main">
+
+    <!-- DASHBOARD -->
+    <section id="dashboard" class="active">
+      <div class="page-header">
+        <div class="page-title">Dashboard <span>Overzicht</span></div>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-label">Totale omzet</div><div class="stat-value" id="statOmzet"><small>€</small>0</div></div>
+        <div class="stat-card blue"><div class="stat-label">Facturen</div><div class="stat-value" id="statFacturen">0</div></div>
+        <div class="stat-card green"><div class="stat-label">Klanten</div><div class="stat-value" id="statKlanten">0</div></div>
+        <div class="stat-card red"><div class="stat-label">Producten</div><div class="stat-value" id="statProducten">0</div></div>
+      </div>
+      <div class="card"><div class="card-title">Recente facturen</div><div id="recentFacturen"><div class="loading"><div class="spinner"></div></div></div></div>
+    </section>
+
+    <!-- FACTUUR MAKEN -->
+    <section id="factuur">
+      <div class="page-header">
+        <div class="page-title">Nieuwe <span>Factuur</span></div>
+        <button class="btn btn-primary" onclick="maakFactuur()">⚡ Factuur aanmaken</button>
+      </div>
+      <div class="card">
+        <div class="card-title">Factuurtype</div>
+        <div class="type-selector">
+          <button class="type-btn" id="typeBtnAuto" onclick="selectType('auto')"><span class="type-icon">🚗</span>Auto-factuur</button>
+          <button class="type-btn" id="typeBtnDienst" onclick="selectType('dienst')"><span class="type-icon">🔧</span>Dienst / Chiptuning</button>
+        </div>
+      </div>
+      <div class="form-grid">
+        <!-- KLANT CARD -->
+        <div class="card">
+          <div class="card-title">Klantgegevens</div>
+          <div class="form-group"><label>Bestaande klant</label><select id="klantSelect" onchange="laadKlant()"></select></div>
+          <div class="divider"></div>
+          <div class="form-group"><label>Naam</label><input id="klantNaam" placeholder="Volledige naam"></div>
+          <div class="postcode-row">
+            <div class="form-group" style="margin:0"><label>Postcode</label><input id="postcode" placeholder="1234AB"></div>
+            <div class="form-group" style="margin:0"><label>Huisnummer</label><input id="huisnummer" placeholder="12"></div>
+            <button class="btn btn-ghost btn-sm" onclick="zoekAdres()" style="height:42px;margin-bottom:0">🔍</button>
+          </div>
+          <div class="form-group" style="margin-top:10px"><label>Adres</label><input id="klantAdres" placeholder="Straat 12"></div>
+          <div class="form-group"><label>Plaats</label><input id="klantPlaats" placeholder="Amsterdam"></div>
+          <div class="form-group"><label>Email</label><input id="klantEmail" placeholder="email@adres.nl" type="email"></div>
+        </div>
+
+        <!-- PRODUCT/AUTO CARD -->
+        <div class="card">
+          <div id="autoFields" style="display:none">
+            <div class="card-title">Autogegevens</div>
+            <div class="form-grid">
+              <div class="form-group"><label>Kenteken</label><input id="kenteken" placeholder="AA-123-BB" oninput="this.value=this.value.toUpperCase()"></div>
+              <div class="form-group"><label>Merk</label><input id="merk" placeholder="BMW"></div>
+              <div class="form-group"><label>Model</label><input id="model" placeholder="320d"></div>
+              <div class="form-group"><label>Bouwjaar</label><input id="bouwjaar" placeholder="2018" type="number"></div>
+            </div>
+            <div class="form-group"><label>KM stand</label><input id="km" placeholder="125000" type="number"></div>
+            <div class="divider"></div>
+            <div class="card-title">Diensten / Onderdelen</div>
+          </div>
+          <div id="dienstFieldsTitle"><div class="card-title">Producten &amp; Diensten</div></div>
+
+          <div class="form-group"><label>Snel kiezen</label><select id="productSelect" onchange="laadProduct()"><option value="">— Selecteer product —</option></select></div>
+          <div class="form-group"><label>Omschrijving</label><input id="productNaam" placeholder="Product of dienst"></div>
+          <div class="form-grid-3">
+            <div class="form-group"><label>Aantal</label><input id="aantal" type="number" value="1" min="0.01" step="0.01"></div>
+            <div class="form-group"><label>Prijs</label><input id="prijs" type="number" placeholder="0.00" step="0.01"></div>
+            <div class="form-group"><label>BTW %</label><select id="btwPerc"><option value="21">21%</option><option value="9">9%</option><option value="0">0%</option></select></div>
+            <div class="form-group"><label>Prijs is</label><select id="btwType"><option value="excl">Excl. BTW</option><option value="incl">Incl. BTW</option><option value="marge">Marge</option></select></div>
+          </div>
+          <button class="btn btn-blue" onclick="addLine()">+ Voeg toe</button>
+
+          <div class="table-wrap" style="margin-top:14px">
+            <table class="lines-table"><thead><tr><th>Omschrijving</th><th>Aantal</th><th>Excl.</th><th>BTW%</th><th>BTW</th><th>Incl.</th><th></th></tr></thead>
+            <tbody id="linesTbody"></tbody></table>
+          </div>
+          <div class="totals-block">
+            <div class="totals-row"><span>Subtotaal excl. BTW</span><span id="subtotaalExcl" style="min-width:90px;text-align:right">€0,00</span></div>
+            <div class="totals-row"><span>BTW</span><span id="subtotaalBTW" style="min-width:90px;text-align:right">€0,00</span></div>
+            <div class="totals-divider"></div>
+            <div class="totals-row final"><span>Totaal incl. BTW</span><span id="totaal" style="min-width:90px;text-align:right">€0,00</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FACTUREN -->
+    <section id="facturen">
+      <div class="page-header">
+        <div class="page-title">Alle <span>Facturen</span></div>
+        <button class="btn btn-primary" onclick="showTab('factuur')">➕ Nieuwe factuur</button>
+      </div>
+      <div class="card" style="padding:0">
+        <div class="table-wrap">
+          <table id="factuurTabel"><thead><tr><th>Nr</th><th>Klant</th><th>Type</th><th>Auto/Dienst</th><th>Bedrag</th><th>Acties</th></tr></thead>
+          <tbody id="factuurBody"><tr><td colspan="6"><div class="loading"><div class="spinner"></div></div></td></tr></tbody></table>
+        </div>
+      </div>
+    </section>
+
+    <!-- KLANTEN -->
+    <section id="klanten">
+      <div class="page-header">
+        <div class="page-title">Klanten<span>beheer</span></div>
+        <button class="btn btn-primary" onclick="openModal('modalKlant')">➕ Nieuwe klant</button>
+      </div>
+      <div class="card" style="padding:0">
+        <div class="table-wrap">
+          <table id="klantenTabel"><thead><tr><th>Naam</th><th>Adres</th><th>Plaats</th><th>Email</th><th>Acties</th></tr></thead>
+          <tbody id="klantenBody"><tr><td colspan="5"><div class="loading"><div class="spinner"></div></div></td></tr></tbody></table>
+        </div>
+      </div>
+    </section>
+
+    <!-- PRODUCTEN -->
+    <section id="producten">
+      <div class="page-header">
+        <div class="page-title">Producten &amp; <span>Diensten</span></div>
+        <button class="btn btn-primary" onclick="openModal('modalProduct')">➕ Nieuw product</button>
+      </div>
+      <div class="card" style="padding:0">
+        <div class="table-wrap">
+          <table id="productenTabel"><thead><tr><th>Naam</th><th>Prijs</th><th>BTW</th><th>Acties</th></tr></thead>
+          <tbody id="productenBody"><tr><td colspan="4"><div class="loading"><div class="spinner"></div></div></td></tr></tbody></table>
+        </div>
+      </div>
+    </section>
+
+    <!-- INSTELLINGEN -->
+    <section id="instellingen">
+      <div class="page-header"><div class="page-title">Bedrijfs<span>instellingen</span></div></div>
+      <div class="card">
+        <div class="sett-section">
+          <h3>Bedrijfsgegevens</h3>
+          <div class="form-grid">
+            <div class="form-group"><label>Bedrijfsnaam</label><input id="sNaam" placeholder="Garagebedrijf B.V."></div>
+            <div class="form-group"><label>Email</label><input id="sEmail" placeholder="info@garage.nl" type="email"></div>
+            <div class="form-group"><label>Adres</label><input id="sAdres" placeholder="Straat 1"></div>
+            <div class="form-group"><label>Plaats</label><input id="sPlaats" placeholder="Rotterdam"></div>
+            <div class="form-group"><label>BTW-nummer</label><input id="sBtw" placeholder="NL123456789B01"></div>
+            <div class="form-group"><label>KVK-nummer</label><input id="sKvk" placeholder="12345678"></div>
+            <div class="form-group"><label>IBAN</label><input id="sIban" placeholder="NL00 BANK 0000 0000 00"></div>
+            <div class="form-group"><label>Telefoon</label><input id="sTel" placeholder="+31 6 12345678"></div>
+          </div>
+        </div>
+        <div class="sett-section">
+          <h3>Factuurvoet</h3>
+          <div class="form-group"><label>Standaard factuurtekst</label><textarea id="sTekst" placeholder="Betaling binnen 14 dagen. Geen garantie op gebruikte onderdelen."></textarea></div>
+        </div>
+        <div class="sett-section">
+          <h3>Account</h3>
+          <div class="form-group"><label>Wachtwoord wijzigen — nieuw wachtwoord</label><input type="password" id="sNieuwPass" placeholder="Minimaal 6 tekens"></div>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn btn-primary" onclick="slaInstellingenOp()">💾 Opslaan</button>
+          <button class="btn btn-ghost" onclick="uitloggen()">🚪 Uitloggen</button>
+        </div>
+      </div>
+    </section>
+
+  </div><!-- /main -->
+</div><!-- /app -->
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<!-- MODAL: Klant -->
+<div class="modal-backdrop" id="modalKlant">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Nieuwe klant</div>
+    <div class="form-group"><label>Naam *</label><input id="mKNaam" placeholder="Volledige naam"></div>
+    <div class="form-group"><label>Adres</label><input id="mKAdres" placeholder="Straat 12"></div>
+    <div class="form-group"><label>Plaats</label><input id="mKPlaats" placeholder="Amsterdam"></div>
+    <div class="form-group"><label>Email</label><input id="mKEmail" placeholder="email@adres.nl" type="email"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="sluitModal('modalKlant')">Annuleren</button>
+      <button class="btn btn-primary" onclick="slaKlantOp()">Opslaan</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Product -->
+<div class="modal-backdrop" id="modalProduct">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Nieuw product / dienst</div>
+    <div class="form-group"><label>Naam *</label><input id="mPNaam" placeholder="Productnaam"></div>
+    <div class="form-group"><label>Prijs</label><input id="mPPrijs" type="number" placeholder="0.00" step="0.01"></div>
+    <div class="form-group"><label>BTW type</label><select id="mPBtwType"><option value="excl">Excl. BTW</option><option value="incl">Incl. BTW</option><option value="marge">Marge</option></select></div>
+    <div class="form-group"><label>BTW %</label><select id="mPBtwPerc"><option value="21">21%</option><option value="9">9%</option><option value="0">0%</option></select></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="sluitModal('modalProduct')">Annuleren</button>
+      <button class="btn btn-primary" onclick="slaProductOp()">Opslaan</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════
+//  SUPABASE INIT
+// ══════════════════════════════════════════════════════════
+const { createClient } = supabase;
+const db = createClient(SUPABASE_URL, SUPABASE_ANON);
+
+let huidigeBedrijfId = null;
+let huidigGebruiker  = null;
+let lines = [];
+let factuurType = null;
+let cachedKlanten  = [];
+let cachedProducten = [];
+
+// ── HELPERS ──
+function eur(v){ return '€'+(+v||0).toFixed(2).replace('.',','); }
+function round2(v){ return Math.round(v*100)/100; }
+function berekenBTW(prijs, aantal, btwType, btwPerc){
+  const p=+prijs, n=+aantal, f=(+btwPerc)/100;
+  let exP, bwP, inP;
+  if(btwType==='marge'){ exP=p; bwP=0; inP=p; }
+  else if(btwType==='excl'){ exP=p; bwP=p*f; inP=p+bwP; }
+  else { inP=p; exP=p/(1+f); bwP=inP-exP; }
+  return { exclPer:round2(exP), btwPer:round2(bwP), inclPer:round2(inP),
+           exclTot:round2(exP*n), btwTot:round2(bwP*n), inclTot:round2(inP*n) };
+}
+
+// ── TOAST ──
+function toast(msg, type='ok'){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.className=type==='err'?'error show':'show';
+  setTimeout(()=>t.classList.remove('show'),3200);
+}
+
+// ── MODALS ──
+function openModal(id){ document.getElementById(id).classList.add('open'); }
+function sluitModal(id){ document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-backdrop').forEach(el=>{
+  el.addEventListener('click',e=>{ if(e.target===el) el.classList.remove('open'); });
+});
+
+// ══════════════════════════════════════════════════════════
+//  AUTH
+// ══════════════════════════════════════════════════════════
+function toonAuthTab(tab) {
+  const allen = ['loginForm','registerForm','wachtScherm','geweigerdScherm'];
+  allen.forEach(id => document.getElementById(id).style.display = 'none');
+  const toon = {login:'loginForm', register:'registerForm', wacht:'wachtScherm', geweigerd:'geweigerdScherm'};
+  if (toon[tab]) document.getElementById(toon[tab]).style.display = (tab==='login'||tab==='register') ? 'flex' : 'block';
+  document.querySelectorAll('.auth-tab').forEach((b,i) =>
+    b.classList.toggle('active', (tab==='login'&&i===0)||(tab==='register'&&i===1))
+  );
+}
+
+async function inloggen() {
+  const email = document.getElementById('loginEmail').value.trim();
+  const pass  = document.getElementById('loginPass').value;
+  const err   = document.getElementById('loginErr');
+  err.classList.remove('show');
+  if (!email||!pass) { err.textContent='Vul email en wachtwoord in.'; err.classList.add('show'); return; }
+  const {error} = await db.auth.signInWithPassword({email, password:pass});
+  if (error) { err.textContent=vertaalAuthFout(error.message); err.classList.add('show'); }
+}
+
+async function registreren() {
+  const bedrijf = document.getElementById('regBedrijf').value.trim();
+  const email   = document.getElementById('regEmail').value.trim();
+  const pass    = document.getElementById('regPass').value;
+  const err     = document.getElementById('regErr');
+  err.classList.remove('show');
+  if (!bedrijf||!email||!pass) { err.textContent='Vul alle velden in.'; err.classList.add('show'); return; }
+  if (pass.length<6) { err.textContent='Wachtwoord minimaal 6 tekens.'; err.classList.add('show'); return; }
+  const {error} = await db.auth.signUp({email, password:pass, options:{data:{bedrijfsnaam:bedrijf}}});
+  if (error) { err.textContent=vertaalAuthFout(error.message); err.classList.add('show'); return; }
+  // Toon wachtscherm — gebruiker is aangemeld maar nog niet goedgekeurd
+  document.getElementById('authScreen').style.display = 'flex';
+  toonAuthTab('wacht');
+}
+
+async function uitloggen() {
+  await db.auth.signOut();
+  huidigeBedrijfId = null; huidigGebruiker = null;
+  document.getElementById('app').classList.remove('show');
+  document.getElementById('adminApp').style.display = 'none';
+  document.getElementById('authScreen').style.display = 'flex';
+  toonAuthTab('login');
+}
+
+async function wachtwoordVergeten() {
+  const email = document.getElementById('loginEmail').value.trim();
+  if (!email) { toast('Vul je e-mailadres in het loginveld in','err'); return; }
+  const {error} = await db.auth.resetPasswordForEmail(email);
+  if (error) toast('Fout: '+error.message,'err');
+  else toast('✉️ Reset-link verstuurd naar '+email);
+}
+
+function vertaalAuthFout(msg) {
+  if (msg.includes('Invalid login'))       return 'Onjuist e-mailadres of wachtwoord.';
+  if (msg.includes('already registered'))  return 'Dit e-mailadres is al in gebruik.';
+  if (msg.includes('Email not confirmed')) return 'Bevestig eerst je e-mailadres.';
+  return msg;
+}
+
+// ── AUTH STATE LISTENER ──
+db.auth.onAuthStateChange(async (event, session) => {
+  if (!session?.user) return;
+
+  huidigGebruiker = session.user;
+  const email = session.user.email || '';
+
+  // Controleer goedkeuringsstatus
+  const {data: statusData} = await db.rpc('mijn_goedkeuring_status');
+  const goedkeuringsStatus = statusData;
+
+  // Verberg auth scherm
+  document.getElementById('authScreen').style.display = 'none';
+
+  // Is dit de admin?
+  const {data: adminCheck} = await db.rpc('is_admin');
+
+  if (adminCheck) {
+    // Admin: toon admin paneel
+    document.getElementById('adminApp').style.display = 'block';
+    document.getElementById('app').classList.remove('show');
+    laadAdminPaneel();
+    return;
+  }
+
+  if (goedkeuringsStatus === 'goedgekeurd') {
+    // Gewone goedgekeurde gebruiker: toon de app
+    await laadBedrijfId();
+    document.getElementById('app').classList.add('show');
+    document.getElementById('sidebarEmail').textContent = email;
+    document.getElementById('avatarLetter').textContent = (email[0]||'?').toUpperCase();
+    renderAll();
+  } else if (goedkeuringsStatus === 'geweigerd') {
+    document.getElementById('authScreen').style.display = 'flex';
+    toonAuthTab('geweigerd');
+  } else {
+    // Wachtend of onbekend
+    document.getElementById('authScreen').style.display = 'flex';
+    toonAuthTab('wacht');
+  }
+});
+
+async function laadBedrijfId() {
+  const {data} = await db.from('bedrijven').select('id').eq('user_id', huidigGebruiker.id).single();
+  huidigeBedrijfId = data?.id || null;
+}
+
+// ══════════════════════════════════════════════════════════
+//  ADMIN PANEEL
+// ══════════════════════════════════════════════════════════
+let adminFilter = 'wachtend';
+
+async function laadAdminPaneel() {
+  filterAdmin('wachtend');
+}
+
+async function filterAdmin(filter) {
+  adminFilter = filter;
+  // Update filter knop stijlen
+  ['wachtend','goedgekeurd','geweigerd','alles'].forEach(f => {
+    const btn = document.getElementById('filterBtn-'+f);
+    if (!btn) return;
+    if (f === filter) {
+      btn.style.background = 'rgba(249,115,22,0.15)';
+      btn.style.color = 'var(--accent)';
+      btn.style.borderColor = 'rgba(249,115,22,0.3)';
+    } else {
+      btn.style.background = 'var(--bg3)';
+      btn.style.color = 'var(--text2)';
+      btn.style.borderColor = 'var(--border)';
+    }
+  });
+
+  // Laad alle gebruikers
+  const {data: alles} = await db.from('gebruiker_status').select('*').order('aangevraagd_op', {ascending:false});
+  if (!alles) return;
+
+  // Update stats
+  document.getElementById('adminStatWacht').textContent = alles.filter(u=>u.status==='wachtend').length;
+  document.getElementById('adminStatGoed').textContent  = alles.filter(u=>u.status==='goedgekeurd').length;
+  document.getElementById('adminStatWeig').textContent  = alles.filter(u=>u.status==='geweigerd').length;
+
+  const gefilterd = filter === 'alles' ? alles : alles.filter(u => u.status === filter);
+  const tbody = document.getElementById('adminTabel');
+
+  if (gefilterd.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="5"><div class="empty"><div class="empty-icon">${filter==='wachtend'?'⏳':'✅'}</div><div class="empty-text">Geen ${filter==='alles'?'gebruikers':filter}</div></div></td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = gefilterd.map(u => {
+    const datum = new Date(u.aangevraagd_op).toLocaleDateString('nl-NL', {day:'numeric',month:'short',year:'numeric'});
+    const statusBadge = u.status === 'goedgekeurd'
+      ? '<span class="badge badge-dienst">✅ Goedgekeurd</span>'
+      : u.status === 'geweigerd'
+      ? '<span class="badge" style="background:rgba(239,68,68,0.15);color:var(--red)">🚫 Geweigerd</span>'
+      : '<span class="badge badge-marge">⏳ Wachtend</span>';
+
+    const acties = u.status === 'wachtend'
+      ? `<div class="row-actions">
+           <button class="btn btn-sm btn-green" onclick="keurGoed('${u.user_id}')">✅ Goedkeuren</button>
+           <button class="btn btn-danger btn-sm" onclick="weiger('${u.user_id}')">🚫 Weigeren</button>
+         </div>`
+      : u.status === 'goedgekeurd'
+      ? `<button class="btn btn-danger btn-sm" onclick="weiger('${u.user_id}')">🚫 Intrekken</button>`
+      : `<button class="btn btn-sm btn-green" onclick="keurGoed('${u.user_id}')">✅ Toch goedkeuren</button>`;
+
+    return `<tr>
+      <td style="color:var(--text);font-weight:500">${u.bedrijfsnaam||'—'}</td>
+      <td style="font-size:13px">${u.email}</td>
+      <td style="font-size:12px;color:var(--text3)">${datum}</td>
+      <td>${statusBadge}</td>
+      <td>${acties}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function keurGoed(userId) {
+  const {error} = await db.rpc('keur_goed', {doel_user_id: userId});
+  if (error) { toast('Fout: '+error.message, 'err'); return; }
+  toast('✅ Gebruiker goedgekeurd');
+  filterAdmin(adminFilter);
+}
+
+async function weiger(userId) {
+  if (!confirm('Weet je zeker dat je deze gebruiker wilt weigeren?')) return;
+  const {error} = await db.rpc('weiger', {doel_user_id: userId});
+  if (error) { toast('Fout: '+error.message, 'err'); return; }
+  toast('Gebruiker geweigerd');
+  filterAdmin(adminFilter);
+}
+
+// ══════════════════════════════════════════════════════════
+//  NAVIGATIE
+// ══════════════════════════════════════════════════════════
+function showTab(id){
+  document.querySelectorAll('section').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.getAttribute('onclick')?.includes(`'${id}'`)));
+  document.querySelectorAll('.bottom-nav button').forEach(b=>b.classList.toggle('active',b.id==='bn-'+id));
+  window.scrollTo(0,0);
+  if(id==='instellingen') laadInstellingenFormulier();
+  if(id==='dashboard')    renderDashboard();
+  if(id==='facturen')     renderFacturen();
+  if(id==='klanten')      renderKlanten();
+  if(id==='producten')    renderProducten();
+}
+
+// ══════════════════════════════════════════════════════════
+//  DASHBOARD
+// ══════════════════════════════════════════════════════════
+async function renderDashboard(){
+  if(!huidigeBedrijfId) return;
+  const [f,k,p]=await Promise.all([
+    db.from('facturen').select('tot_incl').eq('bedrijf_id',huidigeBedrijfId),
+    db.from('klanten').select('id',{count:'exact',head:true}).eq('bedrijf_id',huidigeBedrijfId),
+    db.from('producten').select('id',{count:'exact',head:true}).eq('bedrijf_id',huidigeBedrijfId),
+  ]);
+  const omzet=(f.data||[]).reduce((a,r)=>a+(+r.tot_incl||0),0);
+  document.getElementById('statOmzet').innerHTML=`<small>€</small>${omzet.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,'.')}`;
+  document.getElementById('statFacturen').textContent=(f.data||[]).length;
+  document.getElementById('statKlanten').textContent=k.count||0;
+  document.getElementById('statProducten').textContent=p.count||0;
+
+  const {data:recent}=await db.from('facturen').select('*').eq('bedrijf_id',huidigeBedrijfId).order('aangemaakt_op',{ascending:false}).limit(5);
+  const container=document.getElementById('recentFacturen');
+  if(!recent||recent.length===0){ container.innerHTML='<div class="empty"><div class="empty-icon">📄</div><div class="empty-text">Nog geen facturen</div></div>'; return; }
+  container.innerHTML=recent.map(f=>`
+    <div class="recent-item">
+      <div>
+        <div class="recent-nr">${f.nr}</div>
+        <div class="recent-klant">${f.klant_naam}</div>
+        <div class="recent-sub">${new Date(f.datum).toLocaleDateString('nl-NL')} · ${f.factuur_type==='auto'?(f.kenteken||'Auto'):'Dienst'}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <div class="recent-amount">${eur(f.tot_incl)}</div>
+        <button class="btn btn-ghost btn-sm" onclick="downloadPDF('${f.id}')">📄 PDF</button>
+      </div>
+    </div>`).join('');
+}
+
+// ══════════════════════════════════════════════════════════
+//  FACTUUR MAKEN
+// ══════════════════════════════════════════════════════════
+function selectType(type){
+  factuurType=type;
+  document.getElementById('typeBtnAuto').classList.toggle('selected',type==='auto');
+  document.getElementById('typeBtnDienst').classList.toggle('selected',type==='dienst');
+  document.getElementById('autoFields').style.display=type==='auto'?'block':'none';
+  document.getElementById('dienstFieldsTitle').style.display=type==='auto'?'none':'block';
+  lines=[]; renderLines();
+}
+
+function laadKlant(){
+  const i=document.getElementById('klantSelect').value;
+  if(!i) return;
+  const k=cachedKlanten.find(c=>c.id===i);
+  if(!k) return;
+  document.getElementById('klantNaam').value  =k.naam||'';
+  document.getElementById('klantAdres').value =k.adres||'';
+  document.getElementById('klantPlaats').value=k.plaats||'';
+  document.getElementById('klantEmail').value =k.email||'';
+}
+
+function laadProduct(){
+  const i=document.getElementById('productSelect').value;
+  if(!i) return;
+  const p=cachedProducten.find(x=>x.id===i);
+  if(!p) return;
+  document.getElementById('productNaam').value=p.naam;
+  document.getElementById('prijs').value=p.prijs;
+  document.getElementById('btwType').value=p.btw_type||'excl';
+  document.getElementById('btwPerc').value=p.btw_perc||21;
+}
+
+function addLine(){
+  const naam   =document.getElementById('productNaam').value.trim();
+  const aantal =+document.getElementById('aantal').value;
+  const prijs  =+document.getElementById('prijs').value;
+  const btwType=document.getElementById('btwType').value;
+  const btwPerc=document.getElementById('btwPerc').value;
+  if(!naam||aantal<=0||prijs<=0) return toast('Vul geldige gegevens in','err');
+  const b=berekenBTW(prijs,aantal,btwType,btwPerc);
+  lines.push({naam,aantal,prijs,btwType,btwPerc,...b});
+  document.getElementById('productNaam').value='';
+  document.getElementById('prijs').value='';
+  document.getElementById('aantal').value='1';
+  renderLines();
+}
+
+function removeLine(i){ lines.splice(i,1); renderLines(); }
+
+function renderLines(){
+  const tbody=document.getElementById('linesTbody');
+  tbody.innerHTML='';
+  let tE=0,tB=0,tI=0;
+  lines.forEach((l,i)=>{
+    const isMarge=l.btwType==='marge';
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${l.naam} <span class="badge ${isMarge?'badge-marge':'badge-dienst'}" style="font-size:10px">${isMarge?'Marge':l.btwPerc+'%'}</span></td>
+      <td>${l.aantal}</td>
+      <td>${isMarge?'—':eur(l.exclTot)}</td>
+      <td>${isMarge?'Marge':l.btwPerc+'%'}</td>
+      <td>${isMarge?'—':eur(l.btwTot)}</td>
+      <td style="font-weight:600;color:var(--text)">${eur(l.inclTot)}</td>
+      <td><button class="btn btn-danger btn-sm" onclick="removeLine(${i})">✕</button></td>`;
+    tbody.appendChild(tr);
+    tE+=l.exclTot; tB+=l.btwTot; tI+=l.inclTot;
+  });
+  document.getElementById('subtotaalExcl').textContent=eur(tE);
+  document.getElementById('subtotaalBTW').textContent=eur(tB);
+  document.getElementById('totaal').textContent=eur(tI);
+}
+
+async function maakFactuur(){
+  if(!factuurType)    return toast('Selecteer een factuurtype','err');
+  if(lines.length===0) return toast('Voeg minimaal 1 regel toe','err');
+  const klantNaam=document.getElementById('klantNaam').value.trim();
+  if(!klantNaam)      return toast('Vul een klantnaam in','err');
+
+  // Genereer factuurnummer
+  const {count}=await db.from('facturen').select('id',{count:'exact',head:true}).eq('bedrijf_id',huidigeBedrijfId);
+  const nr='F'+String((count||0)+1).padStart(4,'0');
+
+  const totExcl=round2(lines.reduce((a,l)=>a+l.exclTot,0));
+  const totBtw =round2(lines.reduce((a,l)=>a+l.btwTot,0));
+  const totIncl=round2(lines.reduce((a,l)=>a+l.inclTot,0));
+
+  const factuurData={
+    bedrijf_id:huidigeBedrijfId, nr,
+    klant_naam  :klantNaam,
+    klant_adres :document.getElementById('klantAdres').value,
+    klant_plaats:document.getElementById('klantPlaats').value,
+    klant_email :document.getElementById('klantEmail').value,
+    factuur_type:factuurType,
+    kenteken:factuurType==='auto'?document.getElementById('kenteken').value:null,
+    merk    :factuurType==='auto'?document.getElementById('merk').value:null,
+    model   :factuurType==='auto'?document.getElementById('model').value:null,
+    bouwjaar:factuurType==='auto'?document.getElementById('bouwjaar').value:null,
+    km_stand:factuurType==='auto'?document.getElementById('km').value:null,
+    tot_excl:totExcl, tot_btw:totBtw, tot_incl:totIncl,
+    datum:new Date().toISOString().slice(0,10)
+  };
+
+  const {data:nieuwF,error}=await db.from('facturen').insert(factuurData).select('id').single();
+  if(error||!nieuwF){ toast('Fout bij opslaan factuur','err'); return; }
+
+  const regels=lines.map((l,i)=>({
+    factuur_id:nieuwF.id, naam:l.naam, aantal:l.aantal, prijs:l.prijs,
+    btw_type:l.btwType, btw_perc:+l.btwPerc,
+    excl_tot:l.exclTot, btw_tot:l.btwTot, incl_tot:l.inclTot, volgorde:i
+  }));
+  await db.from('factuur_regels').insert(regels);
+
+  // Reset form
+  lines=[];
+  ['klantNaam','klantAdres','klantPlaats','klantEmail','kenteken','merk','model','bouwjaar','km'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  document.getElementById('klantSelect').value='';
+  factuurType=null;
+  document.getElementById('typeBtnAuto').classList.remove('selected');
+  document.getElementById('typeBtnDienst').classList.remove('selected');
+  document.getElementById('autoFields').style.display='none';
+  renderLines();
+
+  toast('✅ Factuur '+nr+' aangemaakt');
+  showTab('facturen');
+  // PDF direct downloaden
+  const vollF={...factuurData, id:nieuwF.id, lines:lines.slice()};
+  // Laad regels en genereer PDF
+  downloadPDF(nieuwF.id);
+}
+
+// ══════════════════════════════════════════════════════════
+//  FACTUREN LIJST
+// ══════════════════════════════════════════════════════════
+async function renderFacturen(){
+  if(!huidigeBedrijfId) return;
+  const {data}=await db.from('facturen').select('*').eq('bedrijf_id',huidigeBedrijfId).order('aangemaakt_op',{ascending:false});
+  const tbody=document.getElementById('factuurBody');
+  if(!data||data.length===0){
+    tbody.innerHTML='<tr><td colspan="6"><div class="empty"><div class="empty-icon">📄</div><div class="empty-text">Nog geen facturen</div></div></td></tr>'; return;
+  }
+  tbody.innerHTML=data.map(f=>`<tr>
+    <td><span style="font-family:Rajdhani,sans-serif;font-weight:700;color:var(--accent)">${f.nr}</span></td>
+    <td style="color:var(--text)">${f.klant_naam}</td>
+    <td><span class="badge badge-${f.factuur_type}">${f.factuur_type}</span></td>
+    <td>${f.factuur_type==='auto'?`<span class="kenteken-display">${f.kenteken||''}</span>`:(f.klant_naam)}</td>
+    <td><div style="font-family:Rajdhani,sans-serif;font-size:15px;font-weight:700;color:var(--text)">${eur(f.tot_incl)}</div>
+        <div style="font-size:11px;color:var(--text3)">BTW: ${eur(f.tot_btw)}</div></td>
+    <td><div class="row-actions">
+      <button class="btn btn-ghost btn-sm" onclick="downloadPDF('${f.id}')">📄 PDF</button>
+      <button class="btn btn-danger btn-sm" onclick="verwijderFactuur('${f.id}')">✕</button>
+    </div></td>
+  </tr>`).join('');
+}
+
+async function verwijderFactuur(id){
+  if(!confirm('Factuur verwijderen?')) return;
+  await db.from('facturen').delete().eq('id',id);
+  toast('Factuur verwijderd');
+  renderFacturen(); renderDashboard();
+}
+
+// ══════════════════════════════════════════════════════════
+//  KLANTEN
+// ══════════════════════════════════════════════════════════
+async function renderKlanten(){
+  if(!huidigeBedrijfId) return;
+  const {data}=await db.from('klanten').select('*').eq('bedrijf_id',huidigeBedrijfId).order('naam');
+  cachedKlanten=data||[];
+  const tbody=document.getElementById('klantenBody');
+  tbody.innerHTML=cachedKlanten.length===0
+    ?'<tr><td colspan="5"><div class="empty"><div class="empty-icon">👥</div><div class="empty-text">Nog geen klanten</div></div></td></tr>'
+    :cachedKlanten.map(c=>`<tr>
+        <td style="color:var(--text);font-weight:500">${c.naam}</td>
+        <td>${c.adres||''}</td><td>${c.plaats||''}</td><td>${c.email||''}</td>
+        <td><button class="btn btn-danger btn-sm" onclick="verwijderKlant('${c.id}')">✕</button></td>
+      </tr>`).join('');
+  // Klant select in factuurformulier
+  const sel=document.getElementById('klantSelect');
+  sel.innerHTML='<option value="">— Kies bestaande klant —</option>';
+  cachedKlanten.forEach(c=>{ const o=document.createElement('option'); o.value=c.id; o.text=c.naam; sel.add(o); });
+}
+
+async function slaKlantOp(){
+  const naam=document.getElementById('mKNaam').value.trim();
+  if(!naam) return toast('Vul een naam in','err');
+  const {error}=await db.from('klanten').insert({
+    bedrijf_id:huidigeBedrijfId, naam,
+    adres:document.getElementById('mKAdres').value.trim(),
+    plaats:document.getElementById('mKPlaats').value.trim(),
+    email:document.getElementById('mKEmail').value.trim()
+  });
+  if(error){ toast('Fout: '+error.message,'err'); return; }
+  ['mKNaam','mKAdres','mKPlaats','mKEmail'].forEach(id=>document.getElementById(id).value='');
+  sluitModal('modalKlant');
+  toast('✅ Klant toegevoegd');
+  renderKlanten();
+}
+
+async function verwijderKlant(id){
+  if(!confirm('Klant verwijderen?')) return;
+  await db.from('klanten').delete().eq('id',id);
+  toast('Klant verwijderd'); renderKlanten();
+}
+
+// ══════════════════════════════════════════════════════════
+//  PRODUCTEN
+// ══════════════════════════════════════════════════════════
+async function renderProducten(){
+  if(!huidigeBedrijfId) return;
+  const {data}=await db.from('producten').select('*').eq('bedrijf_id',huidigeBedrijfId).order('naam');
+  cachedProducten=data||[];
+  const tbody=document.getElementById('productenBody');
+  tbody.innerHTML=cachedProducten.length===0
+    ?'<tr><td colspan="4"><div class="empty"><div class="empty-icon">🔧</div><div class="empty-text">Nog geen producten</div></div></td></tr>'
+    :cachedProducten.map(p=>`<tr>
+        <td style="color:var(--text);font-weight:500">${p.naam}</td>
+        <td>${eur(p.prijs)}</td>
+        <td><span class="badge badge-${p.btw_type==='marge'?'marge':'dienst'}">${p.btw_type} ${p.btw_perc}%</span></td>
+        <td><button class="btn btn-danger btn-sm" onclick="verwijderProduct('${p.id}')">✕</button></td>
+      </tr>`).join('');
+  const sel=document.getElementById('productSelect');
+  sel.innerHTML='<option value="">— Selecteer product —</option>';
+  cachedProducten.forEach(p=>{ const o=document.createElement('option'); o.value=p.id; o.text=p.naam; sel.add(o); });
+}
+
+async function slaProductOp(){
+  const naam=document.getElementById('mPNaam').value.trim();
+  if(!naam) return toast('Vul een naam in','err');
+  const {error}=await db.from('producten').insert({
+    bedrijf_id:huidigeBedrijfId, naam,
+    prijs:+document.getElementById('mPPrijs').value||0,
+    btw_type:document.getElementById('mPBtwType').value,
+    btw_perc:+document.getElementById('mPBtwPerc').value
+  });
+  if(error){ toast('Fout: '+error.message,'err'); return; }
+  ['mPNaam','mPPrijs'].forEach(id=>document.getElementById(id).value='');
+  sluitModal('modalProduct');
+  toast('✅ Product toegevoegd');
+  renderProducten();
+}
+
+async function verwijderProduct(id){
+  if(!confirm('Product verwijderen?')) return;
+  await db.from('producten').delete().eq('id',id);
+  toast('Product verwijderd'); renderProducten();
+}
+
+// ══════════════════════════════════════════════════════════
+//  INSTELLINGEN
+// ══════════════════════════════════════════════════════════
+async function laadInstellingenFormulier(){
+  if(!huidigeBedrijfId) return;
+  const {data}=await db.from('bedrijven').select('*').eq('id',huidigeBedrijfId).single();
+  if(!data) return;
+  document.getElementById('sNaam').value =data.naam||'';
+  document.getElementById('sEmail').value=data.email||'';
+  document.getElementById('sAdres').value=data.adres||'';
+  document.getElementById('sPlaats').value=data.plaats||'';
+  document.getElementById('sBtw').value  =data.btw_nr||'';
+  document.getElementById('sKvk').value  =data.kvk_nr||'';
+  document.getElementById('sIban').value =data.iban||'';
+  document.getElementById('sTel').value  =data.telefoon||'';
+  document.getElementById('sTekst').value=data.factuur_tekst||'';
+}
+
+async function slaInstellingenOp(){
+  const {error}=await db.from('bedrijven').update({
+    naam         :document.getElementById('sNaam').value,
+    email        :document.getElementById('sEmail').value,
+    adres        :document.getElementById('sAdres').value,
+    plaats       :document.getElementById('sPlaats').value,
+    btw_nr       :document.getElementById('sBtw').value,
+    kvk_nr       :document.getElementById('sKvk').value,
+    iban         :document.getElementById('sIban').value,
+    telefoon     :document.getElementById('sTel').value,
+    factuur_tekst:document.getElementById('sTekst').value
+  }).eq('id',huidigeBedrijfId);
+
+  if(error){ toast('Fout bij opslaan: '+error.message,'err'); return; }
+
+  const nieuwPass=document.getElementById('sNieuwPass').value;
+  if(nieuwPass){
+    const {error:pe}=await db.auth.updateUser({password:nieuwPass});
+    if(pe) toast('Fout wachtwoord: '+pe.message,'err');
+    else { document.getElementById('sNieuwPass').value=''; toast('✅ Instellingen + wachtwoord opgeslagen'); return; }
+  }
+  toast('✅ Instellingen opgeslagen');
+}
+
+// ══════════════════════════════════════════════════════════
+//  POSTCODE LOOKUP
+// ══════════════════════════════════════════════════════════
+async function zoekAdres(){
+  const pc=document.getElementById('postcode').value.replace(/\s/g,'').toUpperCase();
+  const nr=document.getElementById('huisnummer').value.trim();
+  if(!pc||!nr) return toast('Vul postcode en huisnummer in','err');
+  const apis=[
+    async()=>{ const r=await fetch(`https://postcode.tech/api/v1/postcode/full?postcode=${pc}&number=${nr}`,{headers:{Accept:'application/json'}}); if(!r.ok) throw 0; const d=await r.json(); if(!d.street) throw 0; return{straat:d.street,plaats:d.city}; },
+    async()=>{ const r=await fetch(`https://api.postcodeapi.nu/v3/lookup/${pc}/${nr}`); if(!r.ok) throw 0; const d=await r.json(); return{straat:d.street,plaats:d.city}; },
+    async()=>{ const r=await fetch(`https://geodata.nationaalgeoregister.nl/locatieserver/v3/free?q=${encodeURIComponent(pc+' '+nr)}&fl=straatnaam,woonplaatsnaam&rows=1`); const d=await r.json(); const doc=d?.response?.docs?.[0]; if(!doc) throw 0; return{straat:doc.straatnaam,plaats:doc.woonplaatsnaam}; }
+  ];
+  for(const api of apis){
+    try{ const res=await api(); document.getElementById('klantAdres').value=(res.straat||'')+' '+nr; document.getElementById('klantPlaats').value=res.plaats||''; toast('📍 Adres gevonden'); return; }catch(e){}
+  }
+  toast('Adres niet gevonden, vul handmatig in','err');
+}
+
+// ══════════════════════════════════════════════════════════
+//  PDF GENERATIE
+// ══════════════════════════════════════════════════════════
+async function downloadPDF(factuurId){
+  if(!huidigeBedrijfId) return;
+  const [{data:f},{data:regels},{data:bedrijf}]=await Promise.all([
+    db.from('facturen').select('*').eq('id',factuurId).single(),
+    db.from('factuur_regels').select('*').eq('factuur_id',factuurId).order('volgorde'),
+    db.from('bedrijven').select('*').eq('id',huidigeBedrijfId).single()
+  ]);
+  if(!f||!bedrijf) return toast('Kan factuur niet laden','err');
+  genereerPDF(f, regels||[], bedrijf);
+}
+
+function genereerPDF(f, regels, S){
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF();
+  let y=20;
+
+  function draw(){
+    doc.setFillColor(249,115,22); doc.rect(0,0,210,8,'F');
+
+    // Bedrijfsnaam
+    doc.setFontSize(20); doc.setFont('helvetica','bold'); doc.setTextColor(30,30,30);
+    doc.text(S.naam||'Bedrijfsnaam',14,y); y+=7;
+
+    doc.setFontSize(9); doc.setFont('helvetica','normal'); doc.setTextColor(110,110,110);
+    const info=[
+      S.adres&&S.plaats?`${S.adres}, ${S.plaats}`:(S.adres||S.plaats||''),
+      S.btw_nr?`BTW: ${S.btw_nr}`:'', S.kvk_nr?`KVK: ${S.kvk_nr}`:'',
+      S.iban?`IBAN: ${S.iban}`:'', S.email||'', S.telefoon||''
+    ].filter(Boolean);
+    doc.text(info,14,y); y+=info.length*5+6;
+
+    doc.setFontSize(24); doc.setFont('helvetica','bold'); doc.setTextColor(30,30,30);
+    doc.text('FACTUUR',14,y);
+    doc.setFontSize(10); doc.setFont('helvetica','normal'); doc.setTextColor(80,80,80);
+    doc.text(`Nr: ${f.nr}`,130,y-10);
+    doc.text(`Datum: ${new Date(f.datum).toLocaleDateString('nl-NL')}`,130,y-4);
+    y+=10;
+
+    doc.setDrawColor(220,220,220); doc.line(14,y,196,y); y+=8;
+
+    // Klant
+    doc.setFontSize(10); doc.setFont('helvetica','bold'); doc.setTextColor(30,30,30);
+    doc.text('Aan:',14,y); y+=5;
+    doc.setFont('helvetica','normal'); doc.setTextColor(60,60,60);
+    [f.klant_naam,f.klant_adres,f.klant_plaats,f.klant_email].filter(Boolean).forEach(l=>{ doc.text(l,14,y); y+=5; });
+    y+=4;
+
+    // Auto
+    if(f.factuur_type==='auto'&&f.kenteken){
+      doc.setFillColor(245,247,250); doc.rect(14,y,182,20,'F');
+      doc.setFontSize(9); doc.setFont('helvetica','bold'); doc.setTextColor(50,50,50);
+      doc.text('VOERTUIG',18,y+6); doc.setFont('helvetica','normal');
+      doc.text(`Kenteken: ${f.kenteken||''}   ${f.merk||''} ${f.model||''} (${f.bouwjaar||''})`,18,y+12);
+      doc.text(`KM: ${(+f.km_stand||0).toLocaleString('nl-NL')} km`,18,y+17);
+      y+=25;
+    }
+
+    // Regelstabel
+    doc.setFillColor(25,28,38); doc.rect(14,y,182,8,'F');
+    doc.setFontSize(8); doc.setFont('helvetica','bold'); doc.setTextColor(255,255,255);
+    doc.text('Omschrijving',17,y+5.5);
+    doc.text('Aant.',100,y+5.5); doc.text('Excl.',115,y+5.5);
+    doc.text('BTW%',140,y+5.5); doc.text('BTW',152,y+5.5);
+    doc.text('Incl.',185,y+5.5,{align:'right'}); y+=10;
+
+    regels.forEach((l,idx)=>{
+      if(idx%2===0){ doc.setFillColor(250,250,252); doc.rect(14,y-3,182,8,'F'); }
+      doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(40,40,40);
+      const isMarge=l.btw_type==='marge';
+      doc.text((l.naam||'').substring(0,52),17,y+3);
+      doc.text(String(l.aantal),103,y+3);
+      doc.text(isMarge?'—':`€${(+l.excl_tot).toFixed(2)}`,115,y+3);
+      doc.text(isMarge?'Marge':l.btw_perc+'%',142,y+3);
+      doc.text(isMarge?'—':`€${(+l.btw_tot).toFixed(2)}`,152,y+3);
+      doc.text(`€${(+l.incl_tot).toFixed(2)}`,185,y+3,{align:'right'});
+      y+=8;
+    });
+
+    // Totalen
+    y+=4; doc.setDrawColor(200,200,200); doc.line(120,y,196,y); y+=5;
+    doc.setFontSize(9); doc.setFont('helvetica','normal'); doc.setTextColor(80,80,80);
+    doc.text('Subtotaal excl. BTW:',122,y);
+    doc.text(`€${(+f.tot_excl).toFixed(2)}`,195,y,{align:'right'}); y+=6;
+    doc.text('BTW:',122,y);
+    doc.text(`€${(+f.tot_btw).toFixed(2)}`,195,y,{align:'right'}); y+=2;
+    doc.line(120,y,196,y); y+=5;
+    doc.setFontSize(12); doc.setFont('helvetica','bold'); doc.setTextColor(249,115,22);
+    doc.text('TOTAAL INCL. BTW:',122,y);
+    doc.text(`€${(+f.tot_incl).toFixed(2)}`,195,y,{align:'right'}); y+=12;
+
+    if(S.iban){
+      doc.setFontSize(9); doc.setFont('helvetica','normal'); doc.setTextColor(60,60,60);
+      doc.text(`Betaling o.v.v. ${f.nr} naar IBAN: ${S.iban}`,14,y); y+=6;
+    }
+    if(S.factuur_tekst){
+      doc.setFontSize(8); doc.setTextColor(130,130,130);
+      doc.text(doc.splitTextToSize(S.factuur_tekst,182),14,y+2);
+    }
+    doc.setFillColor(249,115,22); doc.rect(0,287,210,3,'F');
+    doc.save(`${f.nr}.pdf`);
+  }
+  draw();
+}
+
+// ══════════════════════════════════════════════════════════
+//  RENDER ALL
+// ══════════════════════════════════════════════════════════
+async function renderAll(){
+  await Promise.all([renderDashboard(), renderKlanten(), renderProducten(), renderFacturen()]);
+}
+</script>
+</body>
+</html>
