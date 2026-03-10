@@ -185,6 +185,8 @@ tr:last-child td{border-bottom:none;}
 .badge{display:inline-block;padding:3px 8px;border-radius:20px;font-size:10px;font-weight:600;white-space:nowrap;}
 .badge-auto{background:rgba(59,130,246,0.15);color:#60a5fa;}
 .badge-dienst{background:rgba(16,185,129,0.15);color:#34d399;}
+.badge-inkoop{background:rgba(168,85,247,0.15);color:#c084fc;}
+.badge-credit{background:rgba(239,68,68,0.15);color:#f87171;}
 .badge-marge{background:rgba(249,115,22,0.15);color:var(--accent);}
 .row-actions{display:flex;gap:6px;flex-wrap:wrap;}
 
@@ -443,12 +445,14 @@ tr:last-child td{border-bottom:none;}
         <div class="type-selector">
           <button class="type-btn" id="typeBtnAuto" onclick="selectType('auto')"><span class="type-icon">🚗</span>Auto-factuur</button>
           <button class="type-btn" id="typeBtnDienst" onclick="selectType('dienst')"><span class="type-icon">🔧</span>Dienst / Chiptuning</button>
+          <button class="type-btn" id="typeBtnInkoop" onclick="selectType('inkoop')"><span class="type-icon">📋</span>Inkoopverklaring</button>
+          <button class="type-btn" id="typeBtnCredit" onclick="selectType('credit')"><span class="type-icon">↩️</span>Creditfactuur</button>
         </div>
       </div>
       <div class="form-grid">
         <!-- KLANT CARD -->
         <div class="card">
-          <div class="card-title">Klantgegevens</div>
+          <div id="klantCardTitle" class="card-title">Klantgegevens</div>
           <div class="form-group"><label>Bestaande klant</label><select id="klantSelect" onchange="laadKlant()"></select></div>
           <div class="divider"></div>
           <div class="form-group"><label>Naam</label><input id="klantNaam" placeholder="Volledige naam"></div>
@@ -460,12 +464,33 @@ tr:last-child td{border-bottom:none;}
           <div class="form-group" style="margin-top:10px"><label>Adres</label><input id="klantAdres" placeholder="Straat 12"></div>
           <div class="form-group"><label>Plaats</label><input id="klantPlaats" placeholder="Amsterdam"></div>
           <div class="form-group"><label>Email</label><input id="klantEmail" placeholder="email@adres.nl" type="email"></div>
+
+          <!-- Extra velden voor inkoopverklaring (verkoper) -->
+          <div id="verkoperFields" style="display:none">
+            <div class="divider"></div>
+            <div class="card-title">BSN / Legitimatie verkoper</div>
+            <div class="form-group"><label>BSN-nummer</label><input id="verkoperBsn" placeholder="123456789"></div>
+            <div class="form-group"><label>Legitimatie type</label><select id="verkoperLegType"><option>Rijbewijs</option><option>Paspoort</option><option>ID-kaart</option></select></div>
+            <div class="form-group"><label>Legitimatie nummer</label><input id="verkoperLegNr" placeholder="AB1234567"></div>
+          </div>
+
+          <!-- Extra velden voor creditfactuur -->
+          <div id="creditRefFields" style="display:none">
+            <div class="divider"></div>
+            <div class="card-title">Creditering</div>
+            <div class="form-group"><label>Oorspronkelijk factuurnummer</label><input id="creditRefNr" placeholder="F0001"></div>
+            <div class="form-group"><label>Reden creditering</label><input id="creditReden" placeholder="Geannuleerde order / retour"></div>
+          </div>
         </div>
 
         <!-- PRODUCT/AUTO CARD -->
-        <div class="card">
+        <div id="productCard" class="card" style="display:none">
+          <!-- Toggle auto velden bij inkoop -->
+          <div id="inkoopAutoToggle" style="display:none;margin-bottom:12px">
+            <button class="btn btn-ghost btn-sm" onclick="toggleInkoopAuto()" id="inkoopAutoBtn">🚗 Voertuiggegevens toevoegen (optioneel)</button>
+          </div>
           <div id="autoFields" style="display:none">
-            <div class="card-title">Autogegevens</div>
+            <div class="card-title">Autogegevens <span style="font-size:12px;color:var(--text3);font-weight:400">(optioneel)</span></div>
             <div class="form-grid">
               <div class="form-group"><label>Kenteken</label><input id="kenteken" placeholder="AA-123-BB" oninput="this.value=this.value.toUpperCase()"></div>
               <div class="form-group"><label>Merk &amp; Model</label><input id="merk" placeholder="Toyota Yaris 1.0 VVTi"></div>
@@ -476,7 +501,7 @@ tr:last-child td{border-bottom:none;}
               <div class="form-group"><label>Brandstof</label><select id="brandstof"><option>Benzine</option><option>Diesel</option><option>Elektrisch</option><option>Hybride</option><option>LPG</option></select></div>
               <div class="form-group"><label>Transmissie</label><select id="transmissie"><option>Handgeschakeld</option><option>Automaat</option></select></div>
               <div class="form-group"><label>Vermogen (kW / PK)</label><input id="vermogen" placeholder="51 kW / 69 PK"></div>
-              <div class="form-group"><label>Verkoopprijs (marge)</label><input id="autoprijs" type="number" placeholder="1500.00" step="0.01"></div>
+              <div id="autoprijsVeld"><div class="form-group"><label id="autoprijsLabel">Verkoopprijs (marge)</label><input id="autoprijs" type="number" placeholder="1500.00" step="0.01"></div></div>
             </div>
             <div class="divider"></div>
             <div class="card-title" style="margin-bottom:8px">Extra regels <span style="font-size:12px;color:var(--text3);font-weight:400">(optioneel)</span></div>
@@ -1183,15 +1208,51 @@ async function renderDashboard(){
 // ══════════════════════════════════════════════════════════
 function selectType(type){
   factuurType=type;
-  document.getElementById('typeBtnAuto').classList.toggle('selected',type==='auto');
-  document.getElementById('typeBtnDienst').classList.toggle('selected',type==='dienst');
-  document.getElementById('autoFields').style.display=type==='auto'?'block':'none';
-  document.getElementById('dienstFieldsTitle').style.display=type==='auto'?'none':'block';
-  document.getElementById('productSectie').style.display=type==='auto'?'none':'block';
+  const isAuto   = type==='auto';
+  const isInkoop = type==='inkoop';
+  const isCredit = type==='credit';
+
+  ['auto','dienst','inkoop','credit'].forEach(t=>{
+    const btn=document.getElementById('typeBtn'+t.charAt(0).toUpperCase()+t.slice(1));
+    if(btn) btn.classList.toggle('selected', type===t);
+  });
+
+  // Altijd productCard tonen zodra type gekozen
+  document.getElementById('productCard').style.display = 'block';
+
+  // Auto velden: tonen bij auto, optioneel tonen bij inkoop (via toggle)
+  document.getElementById('autoFields').style.display        = isAuto ? 'block' : 'none';
+  document.getElementById('dienstFieldsTitle').style.display = isAuto ? 'none'  : 'block';
+
+  // Bij inkoop: auto velden zijn optioneel, toon toggle
+  const inkoopAutoToggle = document.getElementById('inkoopAutoToggle');
+  if(inkoopAutoToggle) inkoopAutoToggle.style.display = isInkoop ? 'block' : 'none';
+
+  // Productregels: verberg bij pure auto, toon bij de rest
+  document.getElementById('productSectie').style.display = isAuto ? 'none' : 'block';
+
+  // Verkoper legitimatie bij inkoop
+  document.getElementById('verkoperFields').style.display  = isInkoop ? 'block' : 'none';
+  document.getElementById('creditRefFields').style.display = isCredit ? 'block' : 'none';
+
+  // Labels aanpassen
+  document.getElementById('klantCardTitle').textContent = isInkoop ? 'Verkoper gegevens' : 'Klantgegevens';
+  if(document.getElementById('dienstFieldsTitle'))
+    document.getElementById('dienstFieldsTitle').innerHTML = isInkoop
+      ? '<div class="card-title">Ingekochte goederen / regels</div>'
+      : '<div class="card-title">Producten &amp; Diensten</div>';
+
   lines=[]; renderLines();
 }
 
-function laadKlant(){
+let inkoopAutoOpen = false;
+function toggleInkoopAuto(){
+  inkoopAutoOpen = !inkoopAutoOpen;
+  document.getElementById('autoFields').style.display = inkoopAutoOpen ? 'block' : 'none';
+  document.getElementById('inkoopAutoBtn').textContent = inkoopAutoOpen
+    ? '✕ Voertuiggegevens verbergen'
+    : '🚗 Voertuiggegevens toevoegen (optioneel)';
+}
   const i=document.getElementById('klantSelect').value;
   if(!i) return;
   const k=cachedKlanten.find(c=>c.id===i);
@@ -1255,12 +1316,16 @@ function renderLines(){
 async function maakFactuur(){
   if(!factuurType)    return toast('Selecteer een factuurtype','err');
   const klantNaam=document.getElementById('klantNaam').value.trim();
-  if(!klantNaam)      return toast('Vul een klantnaam in','err');
+  if(!klantNaam)      return toast(factuurType==='inkoop'?'Vul naam verkoper in':'Vul een klantnaam in','err');
+
+  const isAuto   = factuurType==='auto';
+  const isInkoop = factuurType==='inkoop';
+  const isCredit = factuurType==='credit';
 
   let totExcl=0, totBtw=0, totIncl=0;
   let factuurLines = [...lines];
 
-  if(factuurType==='auto'){
+  if(isAuto){
     const autoprijs = +document.getElementById('autoprijs').value;
     if(!autoprijs||autoprijs<=0) return toast('Vul een verkoopprijs in','err');
     const merk = document.getElementById('merk').value.trim();
@@ -1272,8 +1337,33 @@ async function maakFactuur(){
       btwType: 'marge', btwPerc: 0,
       exclTot: autoprijs, btwTot: 0, inclTot: autoprijs
     }, ...lines];
+  } else if(isInkoop){
+    // Inkoop: regels zijn verplicht, auto velden optioneel
+    if(lines.length===0) return toast('Voeg minimaal 1 inkooppost toe','err');
+    // Als voertuig ingevuld, voeg toe als eerste regel met negatief bedrag
+    const autoprijs = +document.getElementById('autoprijs').value;
+    if(inkoopAutoOpen && autoprijs > 0){
+      const merk = document.getElementById('merk').value.trim();
+      const kenteken = document.getElementById('kenteken').value.trim();
+      const autoNaam = [merk, kenteken?`(${kenteken})`:''].filter(Boolean).join(' ') || 'Voertuig';
+      factuurLines = [{
+        naam: autoNaam, aantal: 1, prijs: autoprijs,
+        btwType: 'marge', btwPerc: 0,
+        exclTot: -autoprijs, btwTot: 0, inclTot: -autoprijs
+      }, ...lines.map(l=>({...l, exclTot:-Math.abs(l.exclTot), btwTot:-Math.abs(l.btwTot), inclTot:-Math.abs(l.inclTot)}))];
+    } else {
+      factuurLines = lines.map(l=>({...l, exclTot:-Math.abs(l.exclTot), btwTot:-Math.abs(l.btwTot), inclTot:-Math.abs(l.inclTot)}));
+    }
   } else {
     if(lines.length===0) return toast('Voeg minimaal 1 regel toe','err');
+    // Credit: maak alle bedragen negatief
+    if(isCredit){
+      factuurLines = factuurLines.map(l=>({...l,
+        exclTot: -Math.abs(l.exclTot),
+        btwTot:  -Math.abs(l.btwTot),
+        inclTot: -Math.abs(l.inclTot)
+      }));
+    }
   }
 
   totExcl = round2(factuurLines.reduce((a,l)=>a+l.exclTot,0));
@@ -1285,8 +1375,13 @@ async function maakFactuur(){
   const prefix = inst.factuur_prefix||'F';
   const startNr = inst.factuur_volgnr||1;
   const volgnr = Math.max(startNr, (bestaande.length||0)+1);
-  const nr = prefix === prefix.match(/\d+$/)?.[0] ? prefix : `${prefix}${String(volgnr).padStart(4,'0')}`;
+  // Credit krijgt CN prefix, inkoop IK prefix tenzij eigen prefix ingesteld
+  let nr;
+  if(isCredit && (prefix==='F'||prefix==='')) nr = `CN${String(volgnr).padStart(4,'0')}`;
+  else if(isInkoop && (prefix==='F'||prefix==='')) nr = `IK${String(volgnr).padStart(4,'0')}`;
+  else nr = `${prefix}${String(volgnr).padStart(4,'0')}`;
 
+  const isAutoType = isAuto||isInkoop;
   const factuurData={
     bedrijf_id:huidigeBedrijfId, nr,
     klant_naam:klantNaam,
@@ -1294,17 +1389,23 @@ async function maakFactuur(){
     klant_plaats:document.getElementById('klantPlaats').value,
     klant_email:document.getElementById('klantEmail').value,
     factuur_type:factuurType,
-    kenteken:factuurType==='auto'?document.getElementById('kenteken').value:null,
-    merk:factuurType==='auto'?document.getElementById('merk').value:null,
-    model:null,
-    bouwjaar:null,
-    km_stand:factuurType==='auto'?document.getElementById('km').value:null,
-    meldcode:factuurType==='auto'?document.getElementById('meldcode').value:null,
-    eerste_toelating:factuurType==='auto'?document.getElementById('eersteToelating').value:null,
-    apk_vervaldatum:factuurType==='auto'?document.getElementById('apkVervaldatum').value:null,
-    brandstof:factuurType==='auto'?document.getElementById('brandstof').value:null,
-    transmissie:factuurType==='auto'?document.getElementById('transmissie').value:null,
-    vermogen:factuurType==='auto'?document.getElementById('vermogen').value:null,
+    kenteken:isAutoType?document.getElementById('kenteken').value:null,
+    merk:isAutoType?document.getElementById('merk').value:null,
+    model:null, bouwjaar:null,
+    km_stand:isAutoType?document.getElementById('km').value:null,
+    meldcode:isAutoType?document.getElementById('meldcode').value:null,
+    eerste_toelating:isAutoType?document.getElementById('eersteToelating').value:null,
+    apk_vervaldatum:isAutoType?document.getElementById('apkVervaldatum').value:null,
+    brandstof:isAutoType?document.getElementById('brandstof').value:null,
+    transmissie:isAutoType?document.getElementById('transmissie').value:null,
+    vermogen:isAutoType?document.getElementById('vermogen').value:null,
+    // Inkoop extra
+    verkoper_bsn:isInkoop?document.getElementById('verkoperBsn').value:null,
+    verkoper_leg_type:isInkoop?document.getElementById('verkoperLegType').value:null,
+    verkoper_leg_nr:isInkoop?document.getElementById('verkoperLegNr').value:null,
+    // Credit extra
+    credit_ref_nr:isCredit?document.getElementById('creditRefNr').value:null,
+    credit_reden:isCredit?document.getElementById('creditReden').value:null,
     tot_excl:totExcl, tot_btw:totBtw, tot_incl:totIncl,
     datum:new Date().toISOString().slice(0,10)
   };
@@ -1318,28 +1419,39 @@ async function maakFactuur(){
     }));
     await dbInsert('factuur_regels', regels);
 
-    // Sla klant automatisch op als die nog niet bestaat
-    const klantAdres = document.getElementById('klantAdres').value.trim();
-    const klantPlaats = document.getElementById('klantPlaats').value.trim();
-    const klantEmail = document.getElementById('klantEmail').value.trim();
-    const bestaandeKlant = cachedKlanten.find(k => k.naam.toLowerCase() === klantNaam.toLowerCase());
-    if (!bestaandeKlant) {
-      try {
-        await dbInsert('klanten', {bedrijf_id:huidigeBedrijfId, naam:klantNaam, adres:klantAdres, plaats:klantPlaats, email:klantEmail});
-        await renderKlanten();
-      } catch(e) { console.warn('Klant opslaan mislukt:', e); }
+    // Sla klant/verkoper automatisch op
+    if(!isInkoop){
+      const bestaandeKlant = cachedKlanten.find(k => k.naam.toLowerCase() === klantNaam.toLowerCase());
+      if (!bestaandeKlant) {
+        try {
+          await dbInsert('klanten', {bedrijf_id:huidigeBedrijfId, naam:klantNaam,
+            adres:document.getElementById('klantAdres').value.trim(),
+            plaats:document.getElementById('klantPlaats').value.trim(),
+            email:document.getElementById('klantEmail').value.trim()});
+          await renderKlanten();
+        } catch(e) { console.warn('Klant opslaan mislukt:', e); }
+      }
     }
 
+    inkoopAutoOpen = false;
     lines=[];
-    ['klantNaam','klantAdres','klantPlaats','klantEmail','kenteken','merk','meldcode','eersteToelating','apkVervaldatum','km','vermogen','autoprijs'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+    ['klantNaam','klantAdres','klantPlaats','klantEmail','kenteken','merk','meldcode','eersteToelating',
+     'apkVervaldatum','km','vermogen','autoprijs','verkoperBsn','verkoperLegNr','creditRefNr','creditReden']
+      .forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
     document.getElementById('klantSelect').value='';
     factuurType=null;
-    document.getElementById('typeBtnAuto').classList.remove('selected');
-    document.getElementById('typeBtnDienst').classList.remove('selected');
+    ['auto','dienst','inkoop','credit'].forEach(t=>{
+      const btn=document.getElementById('typeBtn'+t.charAt(0).toUpperCase()+t.slice(1));
+      if(btn) btn.classList.remove('selected');
+    });
+    document.getElementById('productCard').style.display='none';
     document.getElementById('autoFields').style.display='none';
+    document.getElementById('verkoperFields').style.display='none';
+    document.getElementById('creditRefFields').style.display='none';
+    document.getElementById('inkoopAutoToggle').style.display='none';
     document.getElementById('productSectie').style.display='block';
     renderLines();
-    toast('✅ Factuur '+nr+' aangemaakt');
+    toast('✅ '+nr+' aangemaakt');
     showTab('facturen');
     downloadPDF(nieuwF.id);
   } catch(e) { toast('Fout bij opslaan: '+e.message,'err'); }
@@ -1738,7 +1850,10 @@ function genereerPDF(f, regels, S){
     return y;
   }
 
-  const isAuto=f.factuur_type==='auto';
+  const isAuto   = f.factuur_type==='auto';
+  const isInkoop = f.factuur_type==='inkoop';
+  const isCredit = f.factuur_type==='credit';
+  const isAutoType = isAuto||isInkoop;
   let y=15;
 
   // ── Logo links ──
@@ -1746,6 +1861,13 @@ function genereerPDF(f, regels, S){
     try{ doc.addImage(S.logo_base64,'',ML,8,40,25); }catch(e){}
     y=38;
   }
+
+  // ── Factuur label (type) ──
+  const typeLabel = isInkoop?'INKOOPVERKLARING':isCredit?'CREDITFACTUUR':'FACTUUR';
+  doc.setFontSize(9); doc.setFont('helvetica','bold');
+  doc.setTextColor(cr,cg,cb);
+  doc.text(typeLabel, MR, S.logo_base64?8:14, {align:'right'});
+  doc.setTextColor(30,30,30);
 
   // ── Bedrijfsinfo rechts ──
   let ry=S.logo_base64?10:15;
@@ -1780,10 +1902,13 @@ function genereerPDF(f, regels, S){
   y=Math.max(y,ry,ky)+8;
   hline(y); y+=8;
 
-  // ── Auto-gegevens ──
-  if(isAuto){
+  // ── Auto/Inkoop gegevens ──
+  if(isAutoType){
     doc.setFontSize(12); doc.setFont('helvetica','bold'); doc.setTextColor(30,30,30);
-    doc.text(`Factuur ${f.merk||'Auto'}${f.kenteken?' '+f.kenteken:''}`,ML,y); y+=8;
+    const titel = isInkoop
+      ? `Inkoopverklaring ${f.merk||'Auto'}${f.kenteken?' — '+f.kenteken:''}`
+      : `Factuur ${f.merk||'Auto'}${f.kenteken?' '+f.kenteken:''}`;
+    doc.text(titel, ML, y); y+=8;
 
     const details=[
       ['Kenteken',         f.kenteken||''],
@@ -1808,14 +1933,34 @@ function genereerPDF(f, regels, S){
       doc.setFont('helvetica','normal'); doc.setTextColor(80,80,80); doc.text(d[1],158,sy+i*6);
     });
     y=sy+Math.max(col1.length,col2.length)*6+8;
+
+    // Inkoop: legitimatie verkoper
+    if(isInkoop && (f.verkoper_bsn||f.verkoper_leg_nr)){
+      hline(y); y+=6;
+      doc.setFontSize(10); doc.setFont('helvetica','bold'); doc.setTextColor(30,30,30);
+      doc.text('Legitimatie verkoper', ML, y); y+=6;
+      doc.setFontSize(9); doc.setFont('helvetica','normal'); doc.setTextColor(80,80,80);
+      if(f.verkoper_bsn)     { doc.setFont('helvetica','bold'); doc.text('BSN:',ML,y); doc.setFont('helvetica','normal'); doc.text(f.verkoper_bsn,50,y); y+=5; }
+      if(f.verkoper_leg_type){ doc.setFont('helvetica','bold'); doc.text('Legitimatie:',ML,y); doc.setFont('helvetica','normal'); doc.text(`${f.verkoper_leg_type} ${f.verkoper_leg_nr||''}`,50,y); y+=5; }
+      y+=3;
+    }
+
     hline(y); y+=8;
+  }
+
+  // ── Credit referentie ──
+  if(isCredit && (f.credit_ref_nr||f.credit_reden)){
+    doc.setFontSize(9); doc.setFont('helvetica','normal'); doc.setTextColor(80,80,80);
+    if(f.credit_ref_nr){ doc.setFont('helvetica','bold'); doc.text('Betreft factuur:',ML,y); doc.setFont('helvetica','normal'); doc.text(f.credit_ref_nr,60,y); y+=5; }
+    if(f.credit_reden) { doc.setFont('helvetica','bold'); doc.text('Reden:',ML,y);          doc.setFont('helvetica','normal'); doc.text(f.credit_reden,60,y); y+=5; }
+    y+=3;
   }
 
   // ── Regelstabel ──
   // Header
   doc.setFillColor(240,240,240); doc.rect(ML,y-3,CW,8,'F');
   doc.setFontSize(9); doc.setFont('helvetica','bold'); doc.setTextColor(80,80,80);
-  if(isAuto){
+  if(isAutoType){
     doc.text('Omschrijving',ML+2,y+2);
     doc.text('Prijs',MR,y+2,{align:'right'});
   } else {
@@ -1833,7 +1978,7 @@ function genereerPDF(f, regels, S){
     doc.setFontSize(9); doc.setFont('helvetica','normal'); doc.setTextColor(40,40,40);
     const isMarge=l.btw_type==='marge';
     const label=isMarge?`${l.naam} (Margeregeling)`:l.naam;
-    if(isAuto){
+    if(isAutoType){
       doc.text(label.substring(0,75),ML+2,y+2);
       doc.text(fmt(l.incl_tot),MR,y+2,{align:'right'});
     } else {
@@ -1848,8 +1993,8 @@ function genereerPDF(f, regels, S){
 
   y+=2; y=checkPage(y,30);
 
-  // ── BTW-uitsplitsing (alleen dienst) ──
-  if(!isAuto && f.tot_btw>0){
+  // ── BTW-uitsplitsing (alleen dienst/credit) ──
+  if(!isAutoType && f.tot_btw && f.tot_btw!==0){
     hline(y,120,MR); y+=5;
     doc.setFontSize(9); doc.setFont('helvetica','normal'); doc.setTextColor(80,80,80);
     doc.text('Subtotaal excl. BTW:',122,y); doc.text(fmt(f.tot_excl),MR,y,{align:'right'}); y+=5;
@@ -1865,16 +2010,29 @@ function genereerPDF(f, regels, S){
 
   y=checkPage(y,20);
 
-  // ── Gezien en bereden (alleen auto) ──
+  // ── Gezien en bereden (auto) / Verklaring (inkoop) ──
   if(isAuto){
     const voet=(S.auto_voet||'Als gezien en bereden d.d.:\nGeen garantie\nFinale kwijting').split('\n');
     doc.setFontSize(9); doc.setFont('helvetica','normal'); doc.setTextColor(60,60,60);
     voet.forEach(r=>{ doc.text(r,ML,y); y+=5; });
     y+=4;
   }
+  if(isInkoop){
+    doc.setFontSize(9); doc.setFont('helvetica','normal'); doc.setTextColor(60,60,60);
+    const verklaring = [
+      'Ondergetekende verklaart hierbij het bovengenoemde voertuig te hebben verkocht',
+      `aan ${S.naam||'de koper'} voor het hierboven vermelde bedrag.`,
+      '',
+      'Handtekening verkoper: ___________________________',
+      '',
+      `Datum: ${new Date(f.datum).toLocaleDateString('nl-NL')}`,
+    ];
+    verklaring.forEach(r=>{ doc.text(r,ML,y); y+=5; });
+    y+=4;
+  }
 
-  // ── Betaalinfo + factuurtekst (alleen dienst) ──
-  if(!isAuto){
+  // ── Betaalinfo + factuurtekst (dienst en credit) ──
+  if(!isAutoType){
     if(S.iban){
       doc.setFontSize(9); doc.setFont('helvetica','normal'); doc.setTextColor(60,60,60);
       doc.text(`Betaling o.v.v. ${f.nr} naar IBAN: ${S.iban}`,ML,y); y+=6;
