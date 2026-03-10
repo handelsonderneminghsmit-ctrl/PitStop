@@ -1852,9 +1852,9 @@ function genereerPDF(f, regels, S){
   function hline(y,lx=ML,rx=MR){ doc.setDrawColor(220,220,222); doc.setLineWidth(0.25); doc.line(lx,y,rx,y); }
 
   function addFooter(){
-    doc.setFillColor(246,246,248); doc.rect(0,PH-12,PW,12,'F');
+    doc.setFillColor(240,240,242); doc.rect(0,PH-12,PW,12,'F');
     const parts=[S.kvk_nr?`KVK ${S.kvk_nr}`:'', S.iban||'', S.btw_nr?`BTW ${S.btw_nr}`:''].filter(Boolean);
-    doc.setFontSize(7); doc.setFont('helvetica','normal'); doc.setTextColor(140,140,140);
+    doc.setFontSize(8); doc.setFont('helvetica','bold'); doc.setTextColor(30,30,30);
     doc.text(parts.join('   ·   '), PW/2, PH-4.5, {align:'center'});
   }
   function checkPage(y, needed=12){
