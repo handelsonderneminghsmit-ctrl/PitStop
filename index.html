@@ -618,7 +618,19 @@ tr:last-child td{border-bottom:none;}
 //  SUPABASE INIT
 // ══════════════════════════════════════════════════════════
 const { createClient } = supabase;
-const db = createClient(SUPABASE_URL, SUPABASE_ANON);
+
+// Maak een nieuwe db client aan met het huidige access token
+function maakDbClient(accessToken) {
+  return createClient(SUPABASE_URL, SUPABASE_ANON, {
+    global: {
+      headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {}
+    },
+    auth: { persistSession: false, autoRefreshToken: false }
+  });
+}
+
+let db = maakDbClient(null);
+window._accessToken = null;
 
 let huidigeBedrijfId = null;
 let huidigGebruiker  = null;
@@ -687,8 +699,9 @@ async function inloggen() {
       err.classList.add('show'); return;
     }
 
-    // Sla token op voor gebruik in API calls
+    // Sla token op en maak nieuwe db client met token
     window._accessToken = data.access_token;
+    window.db = maakDbClient(data.access_token);
     await verwerkIngelogdeGebruiker(data.user);
 
   } catch(e) {
@@ -713,7 +726,8 @@ async function rpc(functie, params={}) {
     headers: authHeaders(),
     body: JSON.stringify(params)
   });
-  const data = await res.json();
+  const text = await res.text();
+  const data = text ? JSON.parse(text) : null;
   return {data, error: res.ok ? null : data};
 }
 
