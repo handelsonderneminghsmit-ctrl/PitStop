@@ -492,7 +492,7 @@ tr:last-child td{border-bottom:none;}
           <div id="autoFields" style="display:none">
             <div class="card-title">Autogegevens <span style="font-size:12px;color:var(--text3);font-weight:400">(optioneel)</span></div>
             <div class="form-grid">
-              <div class="form-group"><label>Kenteken</label><input id="kenteken" placeholder="AA-123-BB" oninput="this.value=this.value.toUpperCase()"></div>
+              <div class="form-group"><label>Kenteken <span id="rdwStatus" style="font-size:11px;color:var(--text3);margin-left:6px"></span></label><input id="kenteken" placeholder="AA-123-BB" oninput="this.value=this.value.toUpperCase();rdwDebounce(this.value)"></div>
               <div class="form-group"><label>Merk &amp; Model</label><input id="merk" placeholder="Toyota Yaris 1.0 VVTi"></div>
               <div class="form-group"><label>Meldcode</label><input id="meldcode" placeholder="9899"></div>
               <div class="form-group"><label>Eerste toelating</label><input id="eersteToelating" placeholder="29-04-2009"></div>
@@ -2065,8 +2065,78 @@ function genereerPDF(f, regels, S){
 }
 
 // ══════════════════════════════════════════════════════════
-//  EMAIL FUNCTIES
+//  RDW API
 // ══════════════════════════════════════════════════════════
+let rdwTimer = null;
+function rdwDebounce(val){
+  clearTimeout(rdwTimer);
+  const kenteken = val.replace(/-/g,'').toUpperCase();
+  if(kenteken.length < 6) return;
+  rdwTimer = setTimeout(()=>rdwLookup(kenteken), 600);
+}
+
+async function rdwLookup(kenteken){
+  const status = document.getElementById('rdwStatus');
+  status.textContent = '🔍 ophalen...';
+  status.style.color = 'var(--text3)';
+  try {
+    const res = await fetch(`https://opendata.rdw.nl/resource/m9d7-ebf2.json?kenteken=${kenteken}`);
+    if(!res.ok) throw new Error('RDW niet bereikbaar');
+    const data = await res.json();
+    if(!data||data.length===0){ status.textContent='⚠️ niet gevonden'; return; }
+    const v = data[0];
+
+    // Hulpfuncties
+    const cap = s => s ? s.charAt(0).toUpperCase()+s.slice(1).toLowerCase() : '';
+    const fmtDatum = s => s ? `${s.slice(6,8)}-${s.slice(4,6)}-${s.slice(0,4)}` : '';
+
+    // Merk & model
+    const merk  = cap(v.merk||'');
+    const model = cap(v.handelsbenaming||'');
+    const merkModel = [merk, model].filter(Boolean).join(' ');
+    if(merkModel) document.getElementById('merk').value = merkModel;
+
+    // Eerste toelating
+    const toelating = fmtDatum(v.datum_eerste_toelating||'');
+    if(toelating) document.getElementById('eersteToelating').value = toelating;
+
+    // APK vervaldatum
+    const apk = fmtDatum(v.vervaldatum_apk||'');
+    if(apk) document.getElementById('apkVervaldatum').value = apk;
+
+    // Brandstof (apart endpoint)
+    try {
+      const bRes = await fetch(`https://opendata.rdw.nl/resource/8ys7-d773.json?kenteken=${kenteken}`);
+      const bData = await bRes.json();
+      if(bData&&bData.length>0){
+        const raw = (bData[0].brandstof_omschrijving||'').toLowerCase();
+        const map = {benzine:'Benzine',diesel:'Diesel',elektriciteit:'Elektrisch',lpg:'LPG',
+                     hybride:'Hybride','plug-in hybride':'Hybride'};
+        const bf = Object.entries(map).find(([k])=>raw.includes(k));
+        if(bf) document.getElementById('brandstof').value = bf[1];
+      }
+    } catch(e){}
+
+    // Transmissie
+    const trans = (v.transmissie_omschrijving||'').toLowerCase();
+    if(trans.includes('automat')) document.getElementById('transmissie').value='Automaat';
+    else if(trans) document.getElementById('transmissie').value='Handgeschakeld';
+
+    // Vermogen
+    const kw = v.vermogen_motor_rijklaar||v.nettomaximumvermogen||'';
+    if(kw){
+      const pk = Math.round(+kw * 1.35962);
+      document.getElementById('vermogen').value = `${kw} kW / ${pk} PK`;
+    }
+
+    status.textContent = '✅ gegevens ingevuld';
+    status.style.color = '#34d399';
+    setTimeout(()=>{ status.textContent=''; }, 3000);
+  } catch(e){
+    status.textContent = '⚠️ fout bij ophalen';
+    status.style.color = '#f87171';
+  }
+}
 async function mailFactuurKlant(factuurId){
   const f = cachedFacturen.find(x=>x.id===factuurId);
   if(!f) return;
