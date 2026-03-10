@@ -467,16 +467,22 @@ tr:last-child td{border-bottom:none;}
             <div class="card-title">Autogegevens</div>
             <div class="form-grid">
               <div class="form-group"><label>Kenteken</label><input id="kenteken" placeholder="AA-123-BB" oninput="this.value=this.value.toUpperCase()"></div>
-              <div class="form-group"><label>Merk</label><input id="merk" placeholder="BMW"></div>
-              <div class="form-group"><label>Model</label><input id="model" placeholder="320d"></div>
-              <div class="form-group"><label>Bouwjaar</label><input id="bouwjaar" placeholder="2018" type="number"></div>
+              <div class="form-group"><label>Merk &amp; Model</label><input id="merk" placeholder="Toyota Yaris 1.0 VVTi"></div>
+              <div class="form-group"><label>Meldcode</label><input id="meldcode" placeholder="9899"></div>
+              <div class="form-group"><label>Eerste toelating</label><input id="eersteToelating" placeholder="29-04-2009"></div>
+              <div class="form-group"><label>APK vervaldatum</label><input id="apkVervaldatum" placeholder="31-03-2026"></div>
+              <div class="form-group"><label>Kilometerstand</label><input id="km" placeholder="125000" type="number"></div>
+              <div class="form-group"><label>Brandstof</label><select id="brandstof"><option>Benzine</option><option>Diesel</option><option>Elektrisch</option><option>Hybride</option><option>LPG</option></select></div>
+              <div class="form-group"><label>Transmissie</label><select id="transmissie"><option>Handgeschakeld</option><option>Automaat</option></select></div>
+              <div class="form-group"><label>Vermogen (kW / PK)</label><input id="vermogen" placeholder="51 kW / 69 PK"></div>
+              <div class="form-group"><label>Verkoopprijs (marge)</label><input id="autoprijs" type="number" placeholder="1500.00" step="0.01"></div>
             </div>
-            <div class="form-group"><label>KM stand</label><input id="km" placeholder="125000" type="number"></div>
             <div class="divider"></div>
-            <div class="card-title">Diensten / Onderdelen</div>
+            <div class="card-title" style="margin-bottom:8px">Extra regels <span style="font-size:12px;color:var(--text3);font-weight:400">(optioneel)</span></div>
           </div>
           <div id="dienstFieldsTitle"><div class="card-title">Producten &amp; Diensten</div></div>
 
+          <div id="productSectie">
           <div class="form-group"><label>Snel kiezen</label><select id="productSelect" onchange="laadProduct()"><option value="">— Selecteer product —</option></select></div>
           <div class="form-group"><label>Omschrijving</label><input id="productNaam" placeholder="Product of dienst"></div>
           <div class="form-grid-3">
@@ -486,6 +492,7 @@ tr:last-child td{border-bottom:none;}
             <div class="form-group"><label>Prijs is</label><select id="btwType"><option value="excl">Excl. BTW</option><option value="incl">Incl. BTW</option><option value="marge">Marge</option></select></div>
           </div>
           <button class="btn btn-blue" onclick="addLine()">+ Voeg toe</button>
+          </div>
 
           <div class="table-wrap" style="margin-top:14px">
             <table class="lines-table"><thead><tr><th>Omschrijving</th><th>Aantal</th><th>Excl.</th><th>BTW%</th><th>BTW</th><th>Incl.</th><th></th></tr></thead>
@@ -1046,6 +1053,7 @@ function selectType(type){
   document.getElementById('typeBtnDienst').classList.toggle('selected',type==='dienst');
   document.getElementById('autoFields').style.display=type==='auto'?'block':'none';
   document.getElementById('dienstFieldsTitle').style.display=type==='auto'?'none':'block';
+  document.getElementById('productSectie').style.display=type==='auto'?'none':'block';
   lines=[]; renderLines();
 }
 
@@ -1112,16 +1120,34 @@ function renderLines(){
 
 async function maakFactuur(){
   if(!factuurType)    return toast('Selecteer een factuurtype','err');
-  if(lines.length===0) return toast('Voeg minimaal 1 regel toe','err');
   const klantNaam=document.getElementById('klantNaam').value.trim();
   if(!klantNaam)      return toast('Vul een klantnaam in','err');
 
+  let totExcl=0, totBtw=0, totIncl=0;
+  let factuurLines = [...lines];
+
+  if(factuurType==='auto'){
+    const autoprijs = +document.getElementById('autoprijs').value;
+    if(!autoprijs||autoprijs<=0) return toast('Vul een verkoopprijs in','err');
+    const merk = document.getElementById('merk').value.trim();
+    const kenteken = document.getElementById('kenteken').value.trim();
+    const autoNaam = [merk, kenteken ? `(${kenteken})` : ''].filter(Boolean).join(' ');
+    factuurLines = [{
+      naam: autoNaam || 'Auto',
+      aantal: 1, prijs: autoprijs,
+      btwType: 'marge', btwPerc: 0,
+      exclTot: autoprijs, btwTot: 0, inclTot: autoprijs
+    }, ...lines];
+  } else {
+    if(lines.length===0) return toast('Voeg minimaal 1 regel toe','err');
+  }
+
+  totExcl = round2(factuurLines.reduce((a,l)=>a+l.exclTot,0));
+  totBtw  = round2(factuurLines.reduce((a,l)=>a+l.btwTot,0));
+  totIncl = round2(factuurLines.reduce((a,l)=>a+l.inclTot,0));
+
   const bestaande = await dbGet('facturen', `?select=id&bedrijf_id=eq.${huidigeBedrijfId}`);
   const nr='F'+String((bestaande.length||0)+1).padStart(4,'0');
-
-  const totExcl=round2(lines.reduce((a,l)=>a+l.exclTot,0));
-  const totBtw =round2(lines.reduce((a,l)=>a+l.btwTot,0));
-  const totIncl=round2(lines.reduce((a,l)=>a+l.inclTot,0));
 
   const factuurData={
     bedrijf_id:huidigeBedrijfId, nr,
@@ -1132,16 +1158,22 @@ async function maakFactuur(){
     factuur_type:factuurType,
     kenteken:factuurType==='auto'?document.getElementById('kenteken').value:null,
     merk:factuurType==='auto'?document.getElementById('merk').value:null,
-    model:factuurType==='auto'?document.getElementById('model').value:null,
-    bouwjaar:factuurType==='auto'?document.getElementById('bouwjaar').value:null,
+    model:null,
+    bouwjaar:null,
     km_stand:factuurType==='auto'?document.getElementById('km').value:null,
+    meldcode:factuurType==='auto'?document.getElementById('meldcode').value:null,
+    eerste_toelating:factuurType==='auto'?document.getElementById('eersteToelating').value:null,
+    apk_vervaldatum:factuurType==='auto'?document.getElementById('apkVervaldatum').value:null,
+    brandstof:factuurType==='auto'?document.getElementById('brandstof').value:null,
+    transmissie:factuurType==='auto'?document.getElementById('transmissie').value:null,
+    vermogen:factuurType==='auto'?document.getElementById('vermogen').value:null,
     tot_excl:totExcl, tot_btw:totBtw, tot_incl:totIncl,
     datum:new Date().toISOString().slice(0,10)
   };
 
   try {
     const nieuwF = await dbInsert('facturen', factuurData);
-    const regels=lines.map((l,i)=>({
+    const regels=factuurLines.map((l,i)=>({
       factuur_id:nieuwF.id, naam:l.naam, aantal:l.aantal, prijs:l.prijs,
       btw_type:l.btwType, btw_perc:+l.btwPerc,
       excl_tot:l.exclTot, btw_tot:l.btwTot, incl_tot:l.inclTot, volgorde:i
@@ -1155,24 +1187,19 @@ async function maakFactuur(){
     const bestaandeKlant = cachedKlanten.find(k => k.naam.toLowerCase() === klantNaam.toLowerCase());
     if (!bestaandeKlant) {
       try {
-        await dbInsert('klanten', {
-          bedrijf_id: huidigeBedrijfId,
-          naam: klantNaam,
-          adres: klantAdres,
-          plaats: klantPlaats,
-          email: klantEmail
-        });
+        await dbInsert('klanten', {bedrijf_id:huidigeBedrijfId, naam:klantNaam, adres:klantAdres, plaats:klantPlaats, email:klantEmail});
         await renderKlanten();
       } catch(e) { console.warn('Klant opslaan mislukt:', e); }
     }
 
     lines=[];
-    ['klantNaam','klantAdres','klantPlaats','klantEmail','kenteken','merk','model','bouwjaar','km'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+    ['klantNaam','klantAdres','klantPlaats','klantEmail','kenteken','merk','meldcode','eersteToelating','apkVervaldatum','km','vermogen','autoprijs'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
     document.getElementById('klantSelect').value='';
     factuurType=null;
     document.getElementById('typeBtnAuto').classList.remove('selected');
     document.getElementById('typeBtnDienst').classList.remove('selected');
     document.getElementById('autoFields').style.display='none';
+    document.getElementById('productSectie').style.display='block';
     renderLines();
     toast('✅ Factuur '+nr+' aangemaakt');
     showTab('facturen');
@@ -1370,94 +1397,116 @@ async function downloadPDF(factuurId){
 function genereerPDF(f, regels, S){
   const {jsPDF}=window.jspdf;
   const doc=new jsPDF();
-  let y=20;
 
-  function draw(){
-    doc.setFillColor(249,115,22); doc.rect(0,0,210,8,'F');
+  function fmt(v){ return `€ ${(+v||0).toFixed(2).replace('.',',').replace(/\B(?=(\d{3})+(?!\d)),'.'}`; }
+  function line(x1,y1,x2,y2,r=180,g=180,b=180){ doc.setDrawColor(r,g,b); doc.line(x1,y1,x2,y2); }
 
-    // Bedrijfsnaam
-    doc.setFontSize(20); doc.setFont('helvetica','bold'); doc.setTextColor(30,30,30);
-    doc.text(S.naam||'Bedrijfsnaam',14,y); y+=7;
+  const isAuto = f.factuur_type==='auto';
+  let y=15;
 
-    doc.setFontSize(9); doc.setFont('helvetica','normal'); doc.setTextColor(110,110,110);
-    const info=[
-      S.adres&&S.plaats?`${S.adres}, ${S.plaats}`:(S.adres||S.plaats||''),
-      S.btw_nr?`BTW: ${S.btw_nr}`:'', S.kvk_nr?`KVK: ${S.kvk_nr}`:'',
-      S.iban?`IBAN: ${S.iban}`:'', S.email||'', S.telefoon||''
-    ].filter(Boolean);
-    doc.text(info,14,y); y+=info.length*5+6;
+  // ── Header: bedrijfslogo/naam rechts ──
+  doc.setFontSize(13); doc.setFont('helvetica','bold'); doc.setTextColor(30,30,30);
+  doc.text(S.naam||'', 196, y, {align:'right'}); y+=6;
+  doc.setFontSize(9); doc.setFont('helvetica','normal'); doc.setTextColor(80,80,80);
+  if(S.adres) { doc.text(S.adres, 196, y, {align:'right'}); y+=5; }
+  if(S.plaats) { doc.text(S.plaats, 196, y, {align:'right'}); y+=5; }
+  y+=2;
+  if(S.telefoon) { doc.text(`T: ${S.telefoon}`, 196, y, {align:'right'}); y+=5; }
+  if(S.email)    { doc.text(`E: ${S.email}`, 196, y, {align:'right'}); y+=5; }
+  y+=2;
+  doc.setFont('helvetica','bold'); doc.setTextColor(30,30,30);
+  doc.text(`Factuur: ${f.nr}`, 196, y, {align:'right'}); y+=5;
+  doc.setFont('helvetica','normal'); doc.setTextColor(80,80,80);
+  doc.text(`Datum: ${new Date(f.datum).toLocaleDateString('nl-NL')}`, 196, y, {align:'right'});
 
-    doc.setFontSize(24); doc.setFont('helvetica','bold'); doc.setTextColor(30,30,30);
-    doc.text('FACTUUR',14,y);
-    doc.setFontSize(10); doc.setFont('helvetica','normal'); doc.setTextColor(80,80,80);
-    doc.text(`Nr: ${f.nr}`,130,y-10);
-    doc.text(`Datum: ${new Date(f.datum).toLocaleDateString('nl-NL')}`,130,y-4);
-    y+=10;
+  // ── Klantgegevens links ──
+  let ky=15;
+  doc.setFontSize(11); doc.setFont('helvetica','bold'); doc.setTextColor(30,30,30);
+  doc.text(f.klant_naam||'', 14, ky); ky+=6;
+  doc.setFontSize(9); doc.setFont('helvetica','normal'); doc.setTextColor(80,80,80);
+  if(f.klant_adres) { doc.text(f.klant_adres, 14, ky); ky+=5; }
+  if(f.klant_plaats) { doc.text(f.klant_plaats, 14, ky); ky+=5; }
 
-    doc.setDrawColor(220,220,220); doc.line(14,y,196,y); y+=8;
+  y = Math.max(y, ky) + 10;
+  line(14, y, 196, y); y+=8;
 
-    // Klant
-    doc.setFontSize(10); doc.setFont('helvetica','bold'); doc.setTextColor(30,30,30);
-    doc.text('Aan:',14,y); y+=5;
-    doc.setFont('helvetica','normal'); doc.setTextColor(60,60,60);
-    [f.klant_naam,f.klant_adres,f.klant_plaats,f.klant_email].filter(Boolean).forEach(l=>{ doc.text(l,14,y); y+=5; });
-    y+=4;
+  // ── Auto factuur specifiek ──
+  if(isAuto){
+    doc.setFontSize(12); doc.setFont('helvetica','bold'); doc.setTextColor(30,30,30);
+    const titel = `Factuur ${f.merk||'Auto'}${f.kenteken?' '+f.kenteken:''}`;
+    doc.text(titel, 14, y); y+=8;
 
-    // Auto
-    if(f.factuur_type==='auto'&&f.kenteken){
-      doc.setFillColor(245,247,250); doc.rect(14,y,182,20,'F');
-      doc.setFontSize(9); doc.setFont('helvetica','bold'); doc.setTextColor(50,50,50);
-      doc.text('VOERTUIG',18,y+6); doc.setFont('helvetica','normal');
-      doc.text(`Kenteken: ${f.kenteken||''}   ${f.merk||''} ${f.model||''} (${f.bouwjaar||''})`,18,y+12);
-      doc.text(`KM: ${(+f.km_stand||0).toLocaleString('nl-NL')} km`,18,y+17);
-      y+=25;
-    }
+    // Auto details tabel 2 kolommen
+    const details=[
+      ['Kenteken', f.kenteken||''],
+      ['Kilometerstand', f.km_stand ? `${(+f.km_stand).toLocaleString('nl-NL')} KM` : ''],
+      ['Meldcode', f.meldcode||''],
+      ['Brandstof', f.brandstof||''],
+      ['Eerste toelating', f.eerste_toelating||''],
+      ['Transmissie', f.transmissie||''],
+      ['APK vervaldatum', f.apk_vervaldatum||''],
+      ['Vermogen', f.vermogen||''],
+    ].filter(d=>d[1]);
 
-    // Regelstabel
-    doc.setFillColor(25,28,38); doc.rect(14,y,182,8,'F');
-    doc.setFontSize(8); doc.setFont('helvetica','bold'); doc.setTextColor(255,255,255);
-    doc.text('Omschrijving',17,y+5.5);
-    doc.text('Aant.',100,y+5.5); doc.text('Excl.',115,y+5.5);
-    doc.text('BTW%',140,y+5.5); doc.text('BTW',152,y+5.5);
-    doc.text('Incl.',185,y+5.5,{align:'right'}); y+=10;
+    const col1=details.slice(0,Math.ceil(details.length/2));
+    const col2=details.slice(Math.ceil(details.length/2));
+    const startY=y;
 
-    regels.forEach((l,idx)=>{
-      if(idx%2===0){ doc.setFillColor(250,250,252); doc.rect(14,y-3,182,8,'F'); }
-      doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(40,40,40);
-      const isMarge=l.btw_type==='marge';
-      doc.text((l.naam||'').substring(0,52),17,y+3);
-      doc.text(String(l.aantal),103,y+3);
-      doc.text(isMarge?'—':`€${(+l.excl_tot).toFixed(2)}`,115,y+3);
-      doc.text(isMarge?'Marge':l.btw_perc+'%',142,y+3);
-      doc.text(isMarge?'—':`€${(+l.btw_tot).toFixed(2)}`,152,y+3);
-      doc.text(`€${(+l.incl_tot).toFixed(2)}`,185,y+3,{align:'right'});
-      y+=8;
+    doc.setFontSize(9);
+    col1.forEach((d,i)=>{
+      doc.setFont('helvetica','bold'); doc.setTextColor(50,50,50);
+      doc.text(d[0], 14, startY+i*6);
+      doc.setFont('helvetica','normal'); doc.setTextColor(80,80,80);
+      doc.text(d[1], 60, startY+i*6);
     });
-
-    // Totalen
-    y+=4; doc.setDrawColor(200,200,200); doc.line(120,y,196,y); y+=5;
-    doc.setFontSize(9); doc.setFont('helvetica','normal'); doc.setTextColor(80,80,80);
-    doc.text('Subtotaal excl. BTW:',122,y);
-    doc.text(`€${(+f.tot_excl).toFixed(2)}`,195,y,{align:'right'}); y+=6;
-    doc.text('BTW:',122,y);
-    doc.text(`€${(+f.tot_btw).toFixed(2)}`,195,y,{align:'right'}); y+=2;
-    doc.line(120,y,196,y); y+=5;
-    doc.setFontSize(12); doc.setFont('helvetica','bold'); doc.setTextColor(249,115,22);
-    doc.text('TOTAAL INCL. BTW:',122,y);
-    doc.text(`€${(+f.tot_incl).toFixed(2)}`,195,y,{align:'right'}); y+=12;
-
-    if(S.iban){
-      doc.setFontSize(9); doc.setFont('helvetica','normal'); doc.setTextColor(60,60,60);
-      doc.text(`Betaling o.v.v. ${f.nr} naar IBAN: ${S.iban}`,14,y); y+=6;
-    }
-    if(S.factuur_tekst){
-      doc.setFontSize(8); doc.setTextColor(130,130,130);
-      doc.text(doc.splitTextToSize(S.factuur_tekst,182),14,y+2);
-    }
-    doc.setFillColor(249,115,22); doc.rect(0,287,210,3,'F');
-    doc.save(`${f.nr}.pdf`);
+    col2.forEach((d,i)=>{
+      doc.setFont('helvetica','bold'); doc.setTextColor(50,50,50);
+      doc.text(d[0], 110, startY+i*6);
+      doc.setFont('helvetica','normal'); doc.setTextColor(80,80,80);
+      doc.text(d[1], 158, startY+i*6);
+    });
+    y = startY + Math.max(col1.length, col2.length)*6 + 8;
+    line(14, y, 196, y); y+=8;
   }
-  draw();
+
+  // ── Regelstabel ──
+  // Header
+  doc.setFillColor(240,240,240); doc.rect(14, y-3, 182, 8, 'F');
+  doc.setFontSize(9); doc.setFont('helvetica','bold'); doc.setTextColor(80,80,80);
+  doc.text('Omschrijving', 16, y+2);
+  doc.text('Prijs', 195, y+2, {align:'right'});
+  y+=8;
+
+  regels.forEach((l,idx)=>{
+    if(idx%2===1){ doc.setFillColor(250,250,250); doc.rect(14,y-3,182,8,'F'); }
+    doc.setFontSize(9); doc.setFont('helvetica','normal'); doc.setTextColor(40,40,40);
+    const label = l.btw_type==='marge' ? `${l.naam} (Margeregeling)` : l.naam;
+    doc.text(label.substring(0,75), 16, y+2);
+    doc.text(fmt(l.incl_tot), 195, y+2, {align:'right'});
+    y+=8;
+  });
+
+  // Totaal
+  y+=2; line(14,y,196,y); y+=6;
+  doc.setFontSize(10); doc.setFont('helvetica','bold'); doc.setTextColor(30,30,30);
+  doc.text('Totaal', 130, y);
+  doc.text(fmt(f.tot_incl), 195, y, {align:'right'});
+  y+=12;
+
+  // Voettekst
+  if(S.factuur_tekst){
+    doc.setFontSize(9); doc.setFont('helvetica','normal'); doc.setTextColor(80,80,80);
+    doc.splitTextToSize(S.factuur_tekst, 182).forEach(l=>{ doc.text(l,14,y); y+=5; });
+    y+=4;
+  }
+
+  // Onderste balk
+  line(14, y, 196, y); y+=6;
+  const footer=[S.kvk_nr?`KVK: ${S.kvk_nr}`:'', S.iban?`IBAN: ${S.iban}`:'', S.btw_nr?`BTW: ${S.btw_nr}`:''].filter(Boolean).join('   |   ');
+  doc.setFontSize(8); doc.setTextColor(120,120,120);
+  doc.text(footer, 105, y, {align:'center'});
+
+  doc.save(`${f.nr}.pdf`);
 }
 
 // ══════════════════════════════════════════════════════════
