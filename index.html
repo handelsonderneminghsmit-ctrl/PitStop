@@ -572,7 +572,6 @@ tr:last-child td{border-bottom:none;}
             <div class="form-group"><label>IBAN</label><input id="sIban" placeholder="NL00 BANK 0000 0000 00"></div>
             <div class="form-group"><label>Telefoon</label><input id="sTel" placeholder="+31 6 12345678"></div>
             <div class="form-group"><label>Website</label><input id="sWebsite" placeholder="www.garage.nl"></div>
-            <div class="form-group"><label>Website</label><input id="sWebsite" placeholder="www.mijnbedrijf.nl"></div>
           </div>
         </div>
         <div class="sett-section">
@@ -628,6 +627,11 @@ tr:last-child td{border-bottom:none;}
               </select>
             </div>
           </div>
+        </div>
+        <div class="sett-section">
+          <h3>E-mail boekhouding</h3>
+          <div class="form-group"><label>Email adres boekhouder</label><input id="sBoekhouderEmail" type="email" placeholder="boekhouder@kantoor.nl"></div>
+          <div style="font-size:12px;color:var(--text3);margin-top:4px">Als dit ingevuld is verschijnt er een knop bij elke factuur om deze direct naar de boekhouder te mailen.</div>
         </div>
         <div class="sett-section">
           <h3>Factuurvoet</h3>
@@ -1026,7 +1030,7 @@ dbAuth.auth.onAuthStateChange(async (event, session) => {
 });
 
 async function laadBedrijfId() {
-  const data = await dbGet('bedrijven', `?select=id,standaard_btw_type,standaard_btw_perc,factuur_prefix,factuur_volgnr&user_id=eq.${huidigGebruiker.id}`);
+  const data = await dbGet('bedrijven', `?select=id,standaard_btw_type,standaard_btw_perc,factuur_prefix,factuur_volgnr,boekhouder_email&user_id=eq.${huidigGebruiker.id}`);
   const bedrijf = Array.isArray(data) ? data[0] : data;
   huidigeBedrijfId = bedrijf?.id || null;
   window._bedrijfInst = bedrijf || {};
@@ -1360,6 +1364,7 @@ function renderFactuurRijen(data){
   if(!data||data.length===0){
     tbody.innerHTML='<tr><td colspan="6"><div class="empty"><div class="empty-icon">📄</div><div class="empty-text">Geen facturen gevonden</div></div></td></tr>'; return;
   }
+  const boekhouder = window._bedrijfInst?.boekhouder_email||'';
   tbody.innerHTML=data.map(f=>`<tr>
     <td><span style="font-family:Rajdhani,sans-serif;font-weight:700;color:var(--accent)">${f.nr}</span></td>
     <td style="color:var(--text)">${f.klant_naam}</td>
@@ -1370,6 +1375,8 @@ function renderFactuurRijen(data){
     <td><div class="row-actions">
       <button class="btn btn-ghost btn-sm" onclick="bewerkFactuur('${f.id}')">✏️</button>
       <button class="btn btn-ghost btn-sm" onclick="downloadPDF('${f.id}')">📄 PDF</button>
+      <button class="btn btn-ghost btn-sm" onclick="mailFactuurKlant('${f.id}')" title="Mail naar klant">✉️ Klant</button>
+      ${boekhouder?`<button class="btn btn-ghost btn-sm" onclick="mailFactuurBoekhouder('${f.id}')" title="Mail naar boekhouder">📊 Boekhouding</button>`:''}
       <button class="btn btn-danger btn-sm" onclick="verwijderFactuur('${f.id}')">✕</button>
     </div></td>
   </tr>`).join('');
@@ -1590,7 +1597,7 @@ async function laadInstellingenFormulier(){
   document.getElementById('sIban').value  = data.iban||'';
   document.getElementById('sTel').value   = data.telefoon||'';
   document.getElementById('sWebsite').value = data.website||'';
-  document.getElementById('sWebsite').value = data.website||'';
+  document.getElementById('sBoekhouderEmail').value = data.boekhouder_email||'';
   document.getElementById('sTekst').value    = data.factuur_tekst||'';
   document.getElementById('sAutoVoet').value = data.auto_voet||'Als gezien en bereden d.d.:\nGeen garantie\nFinale kwijting';
   document.getElementById('sAutoVoet').value = data.auto_voet||'Als gezien en bereden d.d.:\nGeen garantie\nFinale kwijting';
@@ -1641,7 +1648,7 @@ async function slaInstellingenOp(){
     iban:          document.getElementById('sIban').value,
     telefoon:      document.getElementById('sTel').value,
     website:       document.getElementById('sWebsite').value,
-    website:       document.getElementById('sWebsite').value,
+    boekhouder_email: document.getElementById('sBoekhouderEmail').value,
     factuur_tekst: document.getElementById('sTekst').value,
     auto_voet:     document.getElementById('sAutoVoet').value,
     auto_voet:     document.getElementById('sAutoVoet').value,
@@ -1898,8 +1905,41 @@ function genereerPDF(f, regels, S){
 }
 
 // ══════════════════════════════════════════════════════════
-//  RENDER ALL
+//  EMAIL FUNCTIES
 // ══════════════════════════════════════════════════════════
+async function mailFactuurKlant(factuurId){
+  const f = cachedFacturen.find(x=>x.id===factuurId);
+  if(!f) return;
+  const S = window._bedrijfInst||{};
+  const email = prompt('E-mailadres klant:', f.klant_email||'');
+  if(!email) return;
+  const onderwerp = encodeURIComponent(`Factuur ${f.nr} - ${S.naam||'Factuur'}`);
+  const datum = new Date(f.datum).toLocaleDateString('nl-NL');
+  const body = encodeURIComponent(
+    `Geachte ${f.klant_naam},\n\nHierbij ontvangt u factuur ${f.nr} d.d. ${datum} ten bedrage van ${eur(f.tot_incl)}.\n\nU kunt de factuur downloaden via de bijgevoegde PDF.\n\n` +
+    (S.iban ? `Wij verzoeken u het bedrag over te maken op ${S.iban} o.v.v. ${f.nr}.\n\n` : '') +
+    `Met vriendelijke groet,\n${S.naam||''}\n${S.telefoon||''}\n${S.email||''}`
+  );
+  // Download PDF eerst
+  await downloadPDF(factuurId);
+  // Open mail client
+  window.location.href = `mailto:${email}?subject=${onderwerp}&body=${body}`;
+}
+
+async function mailFactuurBoekhouder(factuurId){
+  const f = cachedFacturen.find(x=>x.id===factuurId);
+  if(!f) return;
+  const S = window._bedrijfInst||{};
+  const boekhouder = S.boekhouder_email;
+  if(!boekhouder) return toast('Geen boekhouder e-mailadres ingesteld','err');
+  const onderwerp = encodeURIComponent(`Factuur ${f.nr} - ${f.klant_naam} - ${eur(f.tot_incl)}`);
+  const datum = new Date(f.datum).toLocaleDateString('nl-NL');
+  const body = encodeURIComponent(
+    `Beste,\n\nBijgaand factuur ${f.nr} d.d. ${datum}.\n\nKlant: ${f.klant_naam}\nBedrag: ${eur(f.tot_incl)}${f.tot_btw>0?`\nBTW: ${eur(f.tot_btw)}`:''}${f.kenteken?`\nKenteken: ${f.kenteken}`:''}\n\nMet vriendelijke groet,\n${S.naam||''}`
+  );
+  await downloadPDF(factuurId);
+  window.location.href = `mailto:${boekhouder}?subject=${onderwerp}&body=${body}`;
+}
 async function renderAll(){
   await Promise.all([renderDashboard(), renderKlanten(), renderProducten(), renderFacturen()]);
 }
