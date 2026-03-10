@@ -1148,6 +1148,24 @@ async function maakFactuur(){
     }));
     await dbInsert('factuur_regels', regels);
 
+    // Sla klant automatisch op als die nog niet bestaat
+    const klantAdres = document.getElementById('klantAdres').value.trim();
+    const klantPlaats = document.getElementById('klantPlaats').value.trim();
+    const klantEmail = document.getElementById('klantEmail').value.trim();
+    const bestaandeKlant = cachedKlanten.find(k => k.naam.toLowerCase() === klantNaam.toLowerCase());
+    if (!bestaandeKlant) {
+      try {
+        await dbInsert('klanten', {
+          bedrijf_id: huidigeBedrijfId,
+          naam: klantNaam,
+          adres: klantAdres,
+          plaats: klantPlaats,
+          email: klantEmail
+        });
+        await renderKlanten();
+      } catch(e) { console.warn('Klant opslaan mislukt:', e); }
+    }
+
     lines=[];
     ['klantNaam','klantAdres','klantPlaats','klantEmail','kenteken','merk','model','bouwjaar','km'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
     document.getElementById('klantSelect').value='';
