@@ -860,10 +860,12 @@ async function registreren() {
     });
     const data = await res.json();
     if (!res.ok||data.error) { err.textContent=vertaalAuthFout(data.error_description||data.msg||'Registratie mislukt'); err.classList.add('show'); return; }
-    if (data?.id) {
+    console.log('Signup response:', JSON.stringify(data).substring(0,200));
+    const userId = data?.id || data?.user?.id;
+    if (userId) {
       await fetch(`${SUPABASE_URL}/rest/v1/rpc/registreer_gebruiker`, {
         method:'POST', headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON},
-        body: JSON.stringify({p_user_id:data.id, p_email:email, p_bedrijfsnaam:bedrijf})
+        body: JSON.stringify({p_user_id: userId, p_email: email, p_bedrijfsnaam: bedrijf})
       });
     }
     toonAuthTab('wacht');
