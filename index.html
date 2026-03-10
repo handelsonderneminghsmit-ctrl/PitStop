@@ -514,6 +514,9 @@ tr:last-child td{border-bottom:none;}
         <div class="page-title">Alle <span>Facturen</span></div>
         <button class="btn btn-primary" onclick="showTab('factuur')">➕ Nieuwe factuur</button>
       </div>
+      <div class="card" style="padding:12px 16px">
+        <input id="zoekFactuur" placeholder="🔍 Zoek op naam, nummer, kenteken..." oninput="filterFacturen()" style="width:100%;box-sizing:border-box">
+      </div>
       <div class="card" style="padding:0">
         <div class="table-wrap">
           <table id="factuurTabel"><thead><tr><th>Nr</th><th>Klant</th><th>Type</th><th>Auto/Dienst</th><th>Bedrag</th><th>Acties</th></tr></thead>
@@ -527,6 +530,9 @@ tr:last-child td{border-bottom:none;}
       <div class="page-header">
         <div class="page-title">Klanten<span>beheer</span></div>
         <button class="btn btn-primary" onclick="openModal('modalKlant')">➕ Nieuwe klant</button>
+      </div>
+      <div class="card" style="padding:12px 16px">
+        <input id="zoekKlant" placeholder="🔍 Zoek op naam, plaats, email..." oninput="filterKlanten()" style="width:100%;box-sizing:border-box">
       </div>
       <div class="card" style="padding:0">
         <div class="table-wrap">
@@ -584,7 +590,13 @@ tr:last-child td{border-bottom:none;}
           </div>
         </div>
         <div class="sett-section">
-          <h3>Factuur opmaak</h3>
+          <h3>Factuurnummering</h3>
+          <div class="form-grid">
+            <div class="form-group"><label>Prefix</label><input id="sFactuurPrefix" placeholder="F" maxlength="10"></div>
+            <div class="form-group"><label>Volgend nummer</label><input id="sFactuurStart" type="number" placeholder="1" min="1"></div>
+          </div>
+          <div style="font-size:12px;color:var(--text3);margin-top:4px">Voorbeeld: prefix "168" → volgende factuur wordt "168"</div>
+        </div>
           <div class="form-grid">
             <div class="form-group">
               <label>Accentkleur factuur</label>
@@ -635,6 +647,59 @@ tr:last-child td{border-bottom:none;}
 
 <!-- TOAST -->
 <div id="toast"></div>
+
+<!-- MODAL: Klant bewerken -->
+<div class="modal-backdrop" id="modalKlantEdit">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Klant bewerken</div>
+    <input type="hidden" id="mKEditId">
+    <div class="form-group"><label>Naam *</label><input id="mKEditNaam" placeholder="Volledige naam"></div>
+    <div class="form-group"><label>Adres</label><input id="mKEditAdres" placeholder="Straat 12"></div>
+    <div class="form-group"><label>Plaats</label><input id="mKEditPlaats" placeholder="Amsterdam"></div>
+    <div class="form-group"><label>Email</label><input id="mKEditEmail" placeholder="email@adres.nl" type="email"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="sluitModal('modalKlantEdit')">Annuleren</button>
+      <button class="btn btn-primary" onclick="slaKlantBewerkingOp()">Opslaan</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Factuur bewerken -->
+<div class="modal-backdrop" id="modalFactuurEdit">
+  <div class="modal" style="max-width:600px;width:95vw">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Factuur bewerken</div>
+    <input type="hidden" id="mFEditId">
+    <div class="form-grid">
+      <div class="form-group"><label>Klantnaam</label><input id="mFEditKlantNaam" placeholder="Naam"></div>
+      <div class="form-group"><label>Klant adres</label><input id="mFEditKlantAdres" placeholder="Straat 1"></div>
+      <div class="form-group"><label>Klant plaats</label><input id="mFEditKlantPlaats" placeholder="Amsterdam"></div>
+      <div class="form-group"><label>Klant email</label><input id="mFEditKlantEmail" placeholder="email@adres.nl"></div>
+      <div class="form-group"><label>Datum</label><input id="mFEditDatum" type="date"></div>
+      <div class="form-group"><label>Factuurnummer</label><input id="mFEditNr" placeholder="F0001"></div>
+    </div>
+    <div id="mFEditAutoVelden" style="display:none">
+      <div class="divider"></div>
+      <div class="form-grid">
+        <div class="form-group"><label>Kenteken</label><input id="mFEditKenteken" placeholder="AA-123-BB"></div>
+        <div class="form-group"><label>Merk &amp; Model</label><input id="mFEditMerk" placeholder="Toyota Yaris"></div>
+        <div class="form-group"><label>Meldcode</label><input id="mFEditMeldcode"></div>
+        <div class="form-group"><label>Kilometerstand</label><input id="mFEditKm" type="number"></div>
+        <div class="form-group"><label>Eerste toelating</label><input id="mFEditEersteToelating"></div>
+        <div class="form-group"><label>APK vervaldatum</label><input id="mFEditApk"></div>
+        <div class="form-group"><label>Brandstof</label><select id="mFEditBrandstof"><option>Benzine</option><option>Diesel</option><option>Elektrisch</option><option>Hybride</option><option>LPG</option></select></div>
+        <div class="form-group"><label>Transmissie</label><select id="mFEditTransmissie"><option>Handgeschakeld</option><option>Automaat</option></select></div>
+        <div class="form-group"><label>Vermogen</label><input id="mFEditVermogen" placeholder="51 kW / 69 PK"></div>
+        <div class="form-group"><label>Verkoopprijs</label><input id="mFEditAutoprijs" type="number" step="0.01"></div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="sluitModal('modalFactuurEdit')">Annuleren</button>
+      <button class="btn btn-primary" onclick="slaFactuurBewerkingOp()">Opslaan</button>
+    </div>
+  </div>
+</div>
 
 <!-- MODAL: Klant -->
 <div class="modal-backdrop" id="modalKlant">
@@ -956,7 +1021,7 @@ dbAuth.auth.onAuthStateChange(async (event, session) => {
 });
 
 async function laadBedrijfId() {
-  const data = await dbGet('bedrijven', `?select=id,standaard_btw_type,standaard_btw_perc&user_id=eq.${huidigGebruiker.id}`);
+  const data = await dbGet('bedrijven', `?select=id,standaard_btw_type,standaard_btw_perc,factuur_prefix,factuur_volgnr&user_id=eq.${huidigGebruiker.id}`);
   const bedrijf = Array.isArray(data) ? data[0] : data;
   huidigeBedrijfId = bedrijf?.id || null;
   window._bedrijfInst = bedrijf || {};
@@ -1206,7 +1271,11 @@ async function maakFactuur(){
   totIncl = round2(factuurLines.reduce((a,l)=>a+l.inclTot,0));
 
   const bestaande = await dbGet('facturen', `?select=id&bedrijf_id=eq.${huidigeBedrijfId}`);
-  const nr='F'+String((bestaande.length||0)+1).padStart(4,'0');
+  const inst = window._bedrijfInst||{};
+  const prefix = inst.factuur_prefix||'F';
+  const startNr = inst.factuur_volgnr||1;
+  const volgnr = Math.max(startNr, (bestaande.length||0)+1);
+  const nr = prefix === prefix.match(/\d+$/)?.[0] ? prefix : `${prefix}${String(volgnr).padStart(4,'0')}`;
 
   const factuurData={
     bedrijf_id:huidigeBedrijfId, nr,
@@ -1269,12 +1338,22 @@ async function maakFactuur(){
 // ══════════════════════════════════════════════════════════
 //  FACTUREN LIJST
 // ══════════════════════════════════════════════════════════
-async function renderFacturen(){
-  if(!huidigeBedrijfId) return;
-  const data = await dbGet('facturen', `?select=*&bedrijf_id=eq.${huidigeBedrijfId}&order=aangemaakt_op.desc`);
+let cachedFacturen = [];
+
+function filterFacturen(){
+  const q = (document.getElementById('zoekFactuur')?.value||'').toLowerCase();
+  const gefilterd = q ? cachedFacturen.filter(f=>
+    (f.nr||'').toLowerCase().includes(q) ||
+    (f.klant_naam||'').toLowerCase().includes(q) ||
+    (f.kenteken||'').toLowerCase().includes(q)
+  ) : cachedFacturen;
+  renderFactuurRijen(gefilterd);
+}
+
+function renderFactuurRijen(data){
   const tbody=document.getElementById('factuurBody');
-  if(!data||!Array.isArray(data)||data.length===0){
-    tbody.innerHTML='<tr><td colspan="6"><div class="empty"><div class="empty-icon">📄</div><div class="empty-text">Nog geen facturen</div></div></td></tr>'; return;
+  if(!data||data.length===0){
+    tbody.innerHTML='<tr><td colspan="6"><div class="empty"><div class="empty-icon">📄</div><div class="empty-text">Geen facturen gevonden</div></div></td></tr>'; return;
   }
   tbody.innerHTML=data.map(f=>`<tr>
     <td><span style="font-family:Rajdhani,sans-serif;font-weight:700;color:var(--accent)">${f.nr}</span></td>
@@ -1284,10 +1363,90 @@ async function renderFacturen(){
     <td><div style="font-family:Rajdhani,sans-serif;font-size:15px;font-weight:700;color:var(--text)">${eur(f.tot_incl)}</div>
         <div style="font-size:11px;color:var(--text3)">BTW: ${eur(f.tot_btw)}</div></td>
     <td><div class="row-actions">
+      <button class="btn btn-ghost btn-sm" onclick="bewerkFactuur('${f.id}')">✏️</button>
       <button class="btn btn-ghost btn-sm" onclick="downloadPDF('${f.id}')">📄 PDF</button>
       <button class="btn btn-danger btn-sm" onclick="verwijderFactuur('${f.id}')">✕</button>
     </div></td>
   </tr>`).join('');
+}
+
+async function renderFacturen(){
+  if(!huidigeBedrijfId) return;
+  cachedFacturen = await dbGet('facturen', `?select=*&bedrijf_id=eq.${huidigeBedrijfId}&order=aangemaakt_op.desc`);
+  filterFacturen();
+}
+
+async function bewerkFactuur(id){
+  const f = cachedFacturen.find(x=>x.id===id);
+  if(!f) return;
+  document.getElementById('mFEditId').value          = f.id;
+  document.getElementById('mFEditNr').value           = f.nr||'';
+  document.getElementById('mFEditKlantNaam').value    = f.klant_naam||'';
+  document.getElementById('mFEditKlantAdres').value   = f.klant_adres||'';
+  document.getElementById('mFEditKlantPlaats').value  = f.klant_plaats||'';
+  document.getElementById('mFEditKlantEmail').value   = f.klant_email||'';
+  document.getElementById('mFEditDatum').value        = f.datum||'';
+  const isAuto = f.factuur_type==='auto';
+  document.getElementById('mFEditAutoVelden').style.display = isAuto?'block':'none';
+  if(isAuto){
+    document.getElementById('mFEditKenteken').value         = f.kenteken||'';
+    document.getElementById('mFEditMerk').value             = f.merk||'';
+    document.getElementById('mFEditMeldcode').value         = f.meldcode||'';
+    document.getElementById('mFEditKm').value               = f.km_stand||'';
+    document.getElementById('mFEditEersteToelating').value  = f.eerste_toelating||'';
+    document.getElementById('mFEditApk').value              = f.apk_vervaldatum||'';
+    document.getElementById('mFEditBrandstof').value        = f.brandstof||'Benzine';
+    document.getElementById('mFEditTransmissie').value      = f.transmissie||'Handgeschakeld';
+    document.getElementById('mFEditVermogen').value         = f.vermogen||'';
+    document.getElementById('mFEditAutoprijs').value        = f.tot_incl||'';
+  }
+  openModal('modalFactuurEdit');
+}
+
+async function slaFactuurBewerkingOp(){
+  const id = document.getElementById('mFEditId').value;
+  const f = cachedFacturen.find(x=>x.id===id);
+  if(!f) return;
+  const isAuto = f.factuur_type==='auto';
+  const updateData = {
+    nr:          document.getElementById('mFEditNr').value.trim(),
+    klant_naam:  document.getElementById('mFEditKlantNaam').value.trim(),
+    klant_adres: document.getElementById('mFEditKlantAdres').value.trim(),
+    klant_plaats:document.getElementById('mFEditKlantPlaats').value.trim(),
+    klant_email: document.getElementById('mFEditKlantEmail').value.trim(),
+    datum:       document.getElementById('mFEditDatum').value,
+  };
+  if(isAuto){
+    const autoprijs = +document.getElementById('mFEditAutoprijs').value||0;
+    updateData.kenteken        = document.getElementById('mFEditKenteken').value;
+    updateData.merk            = document.getElementById('mFEditMerk').value;
+    updateData.meldcode        = document.getElementById('mFEditMeldcode').value;
+    updateData.km_stand        = document.getElementById('mFEditKm').value;
+    updateData.eerste_toelating= document.getElementById('mFEditEersteToelating').value;
+    updateData.apk_vervaldatum = document.getElementById('mFEditApk').value;
+    updateData.brandstof       = document.getElementById('mFEditBrandstof').value;
+    updateData.transmissie     = document.getElementById('mFEditTransmissie').value;
+    updateData.vermogen        = document.getElementById('mFEditVermogen').value;
+    updateData.tot_incl        = autoprijs;
+    updateData.tot_excl        = autoprijs;
+    updateData.tot_btw         = 0;
+    // Update eerste factuurlijn (auto prijs)
+    try {
+      const regels = await dbGet('factuur_regels', `?factuur_id=eq.${id}&order=volgorde`);
+      if(regels.length>0){
+        const merk = document.getElementById('mFEditMerk').value;
+        const kenteken = document.getElementById('mFEditKenteken').value;
+        await dbUpdate('factuur_regels',`?id=eq.${regels[0].id}`,{
+          naam: [merk, kenteken?`(${kenteken})`:''].filter(Boolean).join(' ')||'Auto',
+          prijs: autoprijs, excl_tot: autoprijs, incl_tot: autoprijs, btw_tot: 0
+        });
+      }
+    } catch(e){}
+  }
+  try {
+    await dbUpdate('facturen',`?id=eq.${id}`,updateData);
+    sluitModal('modalFactuurEdit'); toast('✅ Factuur bijgewerkt'); renderFacturen(); renderDashboard();
+  } catch(e){ toast('Fout: '+e.message,'err'); }
 }
 
 async function verwijderFactuur(id){
@@ -1300,21 +1459,54 @@ async function verwijderFactuur(id){
 // ══════════════════════════════════════════════════════════
 //  KLANTEN
 // ══════════════════════════════════════════════════════════
+function filterKlanten(){
+  const q=(document.getElementById('zoekKlant')?.value||'').toLowerCase();
+  const gefilterd=q?cachedKlanten.filter(k=>(k.naam||'').toLowerCase().includes(q)||(k.plaats||'').toLowerCase().includes(q)||(k.email||'').toLowerCase().includes(q)):cachedKlanten;
+  const tbody=document.getElementById('klantenBody');
+  tbody.innerHTML=gefilterd.length===0
+    ?'<tr><td colspan="5"><div class="empty"><div class="empty-icon">👥</div><div class="empty-text">Geen klanten gevonden</div></div></td></tr>'
+    :gefilterd.map(c=>`<tr>
+        <td style="color:var(--text);font-weight:500">${c.naam}</td>
+        <td>${c.adres||''}</td><td>${c.plaats||''}</td><td>${c.email||''}</td>
+        <td><div class="row-actions">
+          <button class="btn btn-ghost btn-sm" onclick="bewerkKlant('${c.id}')">✏️</button>
+          <button class="btn btn-danger btn-sm" onclick="verwijderKlant('${c.id}')">✕</button>
+        </div></td>
+      </tr>`).join('');
+}
+
 async function renderKlanten(){
   if(!huidigeBedrijfId) return;
   cachedKlanten = await dbGet('klanten', `?select=*&bedrijf_id=eq.${huidigeBedrijfId}&order=naam`);
-  const tbody=document.getElementById('klantenBody');
-  tbody.innerHTML=cachedKlanten.length===0
-    ?'<tr><td colspan="5"><div class="empty"><div class="empty-icon">👥</div><div class="empty-text">Nog geen klanten</div></div></td></tr>'
-    :cachedKlanten.map(c=>`<tr>
-        <td style="color:var(--text);font-weight:500">${c.naam}</td>
-        <td>${c.adres||''}</td><td>${c.plaats||''}</td><td>${c.email||''}</td>
-        <td><button class="btn btn-danger btn-sm" onclick="verwijderKlant('${c.id}')">✕</button></td>
-      </tr>`).join('');
-  // Klant select in factuurformulier
+  filterKlanten();
   const sel=document.getElementById('klantSelect');
   sel.innerHTML='<option value="">— Kies bestaande klant —</option>';
   cachedKlanten.forEach(c=>{ const o=document.createElement('option'); o.value=c.id; o.text=c.naam; sel.add(o); });
+}
+
+function bewerkKlant(id){
+  const k=cachedKlanten.find(c=>c.id===id);
+  if(!k) return;
+  document.getElementById('mKEditId').value   =k.id;
+  document.getElementById('mKEditNaam').value  =k.naam||'';
+  document.getElementById('mKEditAdres').value =k.adres||'';
+  document.getElementById('mKEditPlaats').value=k.plaats||'';
+  document.getElementById('mKEditEmail').value =k.email||'';
+  openModal('modalKlantEdit');
+}
+
+async function slaKlantBewerkingOp(){
+  const id=document.getElementById('mKEditId').value;
+  const naam=document.getElementById('mKEditNaam').value.trim();
+  if(!naam) return toast('Vul een naam in','err');
+  try {
+    await dbUpdate('klanten',`?id=eq.${id}`,{
+      naam, adres:document.getElementById('mKEditAdres').value.trim(),
+      plaats:document.getElementById('mKEditPlaats').value.trim(),
+      email:document.getElementById('mKEditEmail').value.trim()
+    });
+    sluitModal('modalKlantEdit'); toast('✅ Klant bijgewerkt'); renderKlanten();
+  } catch(e){ toast('Fout: '+e.message,'err'); }
 }
 
 async function slaKlantOp(){
@@ -1393,6 +1585,8 @@ async function laadInstellingenFormulier(){
   document.getElementById('sIban').value  = data.iban||'';
   document.getElementById('sTel').value   = data.telefoon||'';
   document.getElementById('sTekst').value = data.factuur_tekst||'';
+  document.getElementById('sFactuurPrefix').value = data.factuur_prefix||'F';
+  document.getElementById('sFactuurStart').value  = data.factuur_volgnr||1;
   // Opmaak
   const kleur = data.factuur_kleur||'#F97316';
   document.getElementById('sKleur').value    = kleur;
@@ -1441,7 +1635,9 @@ async function slaInstellingenOp(){
     factuur_kleur: kleur,
     betaaltermijn: +document.getElementById('sBetaaltermijn').value||14,
     standaard_btw_type: document.getElementById('sStdBtwType').value,
-    standaard_btw_perc: +document.getElementById('sStdBtwPerc').value
+    standaard_btw_perc: +document.getElementById('sStdBtwPerc').value,
+    factuur_prefix: document.getElementById('sFactuurPrefix').value||'F',
+    factuur_volgnr: +document.getElementById('sFactuurStart').value||1,
   };
   if(window._logoBase64 !== undefined) updateData.logo_base64 = window._logoBase64;
 
