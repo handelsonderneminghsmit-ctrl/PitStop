@@ -673,8 +673,40 @@ async function inloggen() {
   const err   = document.getElementById('loginErr');
   err.classList.remove('show');
   if (!email||!pass) { err.textContent='Vul email en wachtwoord in.'; err.classList.add('show'); return; }
-  const {error} = await db.auth.signInWithPassword({email, password:pass});
-  if (error) { err.textContent=vertaalAuthFout(error.message); err.classList.add('show'); }
+  const {data, error} = await db.auth.signInWithPassword({email, password:pass});
+  if (error) { err.textContent=vertaalAuthFout(error.message); err.classList.add('show'); return; }
+  if (data?.user) await verwerkIngelogdeGebruiker(data.user);
+}
+
+async function verwerkIngelogdeGebruiker(user) {
+  huidigGebruiker = user;
+  const email = user.email || '';
+
+  const {data: statusData} = await db.rpc('mijn_goedkeuring_status');
+  const {data: adminCheck} = await db.rpc('is_admin');
+
+  document.getElementById('authScreen').style.display = 'none';
+
+  if (adminCheck) {
+    document.getElementById('adminApp').style.display = 'block';
+    document.getElementById('app').classList.remove('show');
+    laadAdminPaneel();
+    return;
+  }
+
+  if (statusData === 'goedgekeurd') {
+    await laadBedrijfId();
+    document.getElementById('app').classList.add('show');
+    document.getElementById('sidebarEmail').textContent = email;
+    document.getElementById('avatarLetter').textContent = (email[0]||'?').toUpperCase();
+    renderAll();
+  } else if (statusData === 'geweigerd') {
+    document.getElementById('authScreen').style.display = 'flex';
+    toonAuthTab('geweigerd');
+  } else {
+    document.getElementById('authScreen').style.display = 'flex';
+    toonAuthTab('wacht');
+  }
 }
 
 async function registreren() {
@@ -689,26 +721,24 @@ async function registreren() {
   const {data, error} = await db.auth.signUp({email, password:pass, options:{data:{bedrijfsnaam:bedrijf}}});
   if (error) { err.textContent=vertaalAuthFout(error.message); err.classList.add('show'); return; }
 
-  // Maak gebruiker_status rij aan vanuit de app (trigger werkt niet op Supabase)
   if (data?.user) {
-    // Haal admin email op
-    const {data: adminData} = await db.from('app_instellingen').select('waarde').eq('sleutel','admin_email').single();
-    const isAdmin = adminData?.waarde?.toLowerCase() === email.toLowerCase();
-    
-    await db.from('gebruiker_status').upsert({
-      user_id     : data.user.id,
-      email       : email,
-      bedrijfsnaam: bedrijf,
-      status      : isAdmin ? 'goedgekeurd' : 'wachtend'
-    }, {onConflict: 'user_id'});
+    // Gebruik de service functie via RPC om gebruiker_status aan te maken
+    // Dit werkt ook zonder ingelogd te zijn
+    const {error: rpcErr} = await db.rpc('registreer_gebruiker', {
+      p_user_id    : data.user.id,
+      p_email      : email,
+      p_bedrijfsnaam: bedrijf
+    });
 
-    // Admin krijgt ook direct een bedrijfsprofiel
-    if (isAdmin) {
-      await db.from('bedrijven').upsert({
-        user_id: data.user.id,
-        naam   : bedrijf,
-        email  : email
-      }, {onConflict: 'user_id'});
+    if (rpcErr) {
+      console.error('registreer_gebruiker fout:', rpcErr);
+      // Fallback: probeer directe insert
+      await db.from('gebruiker_status').insert({
+        user_id     : data.user.id,
+        email       : email,
+        bedrijfsnaam: bedrijf,
+        status      : 'wachtend'
+      });
     }
   }
 
@@ -741,43 +771,8 @@ function vertaalAuthFout(msg) {
 
 // ── AUTH STATE LISTENER ──
 db.auth.onAuthStateChange(async (event, session) => {
-  if (!session?.user) return;
-
-  huidigGebruiker = session.user;
-  const email = session.user.email || '';
-
-  // Controleer goedkeuringsstatus
-  const {data: statusData} = await db.rpc('mijn_goedkeuring_status');
-  const goedkeuringsStatus = statusData;
-
-  // Verberg auth scherm
-  document.getElementById('authScreen').style.display = 'none';
-
-  // Is dit de admin?
-  const {data: adminCheck} = await db.rpc('is_admin');
-
-  if (adminCheck) {
-    // Admin: toon admin paneel
-    document.getElementById('adminApp').style.display = 'block';
-    document.getElementById('app').classList.remove('show');
-    laadAdminPaneel();
-    return;
-  }
-
-  if (goedkeuringsStatus === 'goedgekeurd') {
-    // Gewone goedgekeurde gebruiker: toon de app
-    await laadBedrijfId();
-    document.getElementById('app').classList.add('show');
-    document.getElementById('sidebarEmail').textContent = email;
-    document.getElementById('avatarLetter').textContent = (email[0]||'?').toUpperCase();
-    renderAll();
-  } else if (goedkeuringsStatus === 'geweigerd') {
-    document.getElementById('authScreen').style.display = 'flex';
-    toonAuthTab('geweigerd');
-  } else {
-    // Wachtend of onbekend
-    document.getElementById('authScreen').style.display = 'flex';
-    toonAuthTab('wacht');
+  if (event === 'SIGNED_IN' && session?.user) {
+    await verwerkIngelogdeGebruiker(session.user);
   }
 });
 
