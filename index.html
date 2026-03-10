@@ -1253,6 +1253,7 @@ function toggleInkoopAuto(){
     ? '✕ Voertuiggegevens verbergen'
     : '🚗 Voertuiggegevens toevoegen (optioneel)';
 }
+function laadKlant(){
   const i=document.getElementById('klantSelect').value;
   if(!i) return;
   const k=cachedKlanten.find(c=>c.id===i);
