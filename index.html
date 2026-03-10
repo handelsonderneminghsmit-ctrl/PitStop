@@ -292,7 +292,7 @@ tr:last-child td{border-bottom:none;}
 
     <div class="auth-tabs">
       <button class="auth-tab active" onclick="toonAuthTab('login')">Inloggen</button>
-      <button class="auth-tab" onclick="toonAuthTab('register')">Registreren</button>
+      <button class="auth-tab" onclick="toonAuthTab('register')"></button>
     </div>
 
     <!-- LOGIN -->
@@ -683,11 +683,55 @@ async function registreren() {
   const pass    = document.getElementById('regPass').value;
   const err     = document.getElementById('regErr');
   err.classList.remove('show');
-  if (!bedrijf||!email||!pass) { err.textContent='Vul alle velden in.'; err.classList.add('show'); return; }
-  if (pass.length<6) { err.textContent='Wachtwoord minimaal 6 tekens.'; err.classList.add('show'); return; }
-  const {error} = await db.auth.signUp({email, password:pass, options:{data:{bedrijfsnaam:bedrijf}}});
-  if (error) { err.textContent=vertaalAuthFout(error.message); err.classList.add('show'); return; }
-  // Toon wachtscherm — gebruiker is aangemeld maar nog niet goedgekeurd
+
+  if (!bedrijf || !email || !pass) {
+    err.textContent = 'Vul alle velden in.';
+    err.classList.add('show');
+    return;
+  }
+  if (pass.length < 6) {
+    err.textContent = 'Wachtwoord minimaal 6 tekens.';
+    err.classList.add('show');
+    return;
+  }
+
+  // Stap 1: maak user aan in Supabase Auth
+  const { data, error } = await db.auth.signUp({
+    email,
+    password: pass,
+    options: { data: { bedrijfsnaam: bedrijf } }
+  });
+
+  if (error) {
+    err.textContent = vertaalAuthFout(error.message);
+    err.classList.add('show');
+    return;
+  }
+
+  const userId = data.user?.id;
+  if (!userId) {
+    err.textContent = 'Fout bij aanmaken van gebruiker.';
+    err.classList.add('show');
+    return;
+  }
+
+  // Stap 2: voeg gebruiker toe aan gebruiker_status
+  const { error: statusError } = await db.from('gebruiker_status').insert({
+    user_id: userId,
+    email,
+    bedrijfsnaam: bedrijf,
+    status: 'wachtend',
+    aangevraagd_op: new Date().toISOString()
+  });
+
+  if (statusError) {
+    console.error('Fout bij opslaan status:', statusError);
+    err.textContent = 'Fout bij opslaan van status.';
+    err.classList.add('show');
+    return;
+  }
+
+  // Stap 3: Toon wachtscherm
   document.getElementById('authScreen').style.display = 'flex';
   toonAuthTab('wacht');
 }
