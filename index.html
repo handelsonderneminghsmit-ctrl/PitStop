@@ -675,7 +675,6 @@ async function inloggen() {
   if (!email||!pass) { err.textContent='Vul email en wachtwoord in.'; err.classList.add('show'); return; }
 
   try {
-    // Directe fetch als de Supabase client hangt
     const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json', 'apikey': SUPABASE_ANON},
@@ -688,8 +687,16 @@ async function inloggen() {
       err.classList.add('show'); return;
     }
 
-    // Sla sessie op in Supabase client
-    await db.auth.setSession({access_token: data.access_token, refresh_token: data.refresh_token});
+    // Sla token op zodat Supabase client het gebruikt voor volgende requests
+    localStorage.setItem('sb-access-token', data.access_token);
+    localStorage.setItem('sb-refresh-token', data.refresh_token);
+
+    // Herstart de Supabase client met de nieuwe sessie
+    const {createClient} = supabase;
+    window.db = createClient(SUPABASE_URL, SUPABASE_ANON, {
+      global: { headers: { Authorization: `Bearer ${data.access_token}` } }
+    });
+
     await verwerkIngelogdeGebruiker(data.user);
 
   } catch(e) {
