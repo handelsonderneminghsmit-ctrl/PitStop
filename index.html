@@ -280,8 +280,8 @@ tr:last-child td{border-bottom:none;}
 <script>
   // !! VERVANG DEZE WAARDEN MET JOUW SUPABASE GEGEVENS !!
   // Te vinden op: https://supabase.com → jouw project → Settings → API
-  const SUPABASE_URL  = 'https://kgtnedygwjgcnoqzdjbr.supabase.co';
-  const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtndG5lZHlnd2pnY25vcXpkamJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMwOTYwMDMsImV4cCI6MjA4ODY3MjAwM30.yZCOngIu3E-mJ866ykiRC8r4YRX-RnowrbkgAPWoPfg';
+  const SUPABASE_URL  = 'https://JOUW-PROJECT.supabase.co';
+  const SUPABASE_ANON = 'JOUW-ANON-KEY';
 </script>
 
 <!-- ══ AUTH SCHERM ══ -->
@@ -685,10 +685,33 @@ async function registreren() {
   err.classList.remove('show');
   if (!bedrijf||!email||!pass) { err.textContent='Vul alle velden in.'; err.classList.add('show'); return; }
   if (pass.length<6) { err.textContent='Wachtwoord minimaal 6 tekens.'; err.classList.add('show'); return; }
-  const {error} = await db.auth.signUp({email, password:pass, options:{data:{bedrijfsnaam:bedrijf}}});
+
+  const {data, error} = await db.auth.signUp({email, password:pass, options:{data:{bedrijfsnaam:bedrijf}}});
   if (error) { err.textContent=vertaalAuthFout(error.message); err.classList.add('show'); return; }
-  // Toon wachtscherm — gebruiker is aangemeld maar nog niet goedgekeurd
-  document.getElementById('authScreen').style.display = 'flex';
+
+  // Maak gebruiker_status rij aan vanuit de app (trigger werkt niet op Supabase)
+  if (data?.user) {
+    // Haal admin email op
+    const {data: adminData} = await db.from('app_instellingen').select('waarde').eq('sleutel','admin_email').single();
+    const isAdmin = adminData?.waarde?.toLowerCase() === email.toLowerCase();
+    
+    await db.from('gebruiker_status').upsert({
+      user_id     : data.user.id,
+      email       : email,
+      bedrijfsnaam: bedrijf,
+      status      : isAdmin ? 'goedgekeurd' : 'wachtend'
+    }, {onConflict: 'user_id'});
+
+    // Admin krijgt ook direct een bedrijfsprofiel
+    if (isAdmin) {
+      await db.from('bedrijven').upsert({
+        user_id: data.user.id,
+        naam   : bedrijf,
+        email  : email
+      }, {onConflict: 'user_id'});
+    }
+  }
+
   toonAuthTab('wacht');
 }
 
