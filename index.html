@@ -683,54 +683,81 @@ async function registreren() {
   const pass    = document.getElementById('regPass').value;
   const err     = document.getElementById('regErr');
   err.classList.remove('show');
-
-  if (!bedrijf || !email || !pass) {
-    err.textContent = 'Vul alle velden in.';
-    err.classList.add('show');
-    return;
-  }
-
-  if (pass.length < 6) {
-    err.textContent = 'Wachtwoord minimaal 6 tekens.';
-    err.classList.add('show');
-    return;
-  }
-
-  // 1️⃣ Sign up bij Supabase Auth
-  const { data, error } = await db.auth.signUp({
-    email,
-    password: pass,
-    options: { data: { bedrijfsnaam: bedrijf } }
-  });
-
-  if (error) {
-    err.textContent = vertaalAuthFout(error.message);
-    err.classList.add('show');
-    return;
-  }
-
-  // 2️⃣ Voeg de gebruiker toe aan gebruiker_status
-  if (data?.user?.id) {
-    const { error: statErr } = await db.from('gebruiker_status').insert({
-      user_id: data.user.id,        // MUST: user_id = auth.uid()
-      email: email,
-      bedrijfsnaam: bedrijf,
-      status: 'wachtend',
-      aangevraagd_op: new Date().toISOString()
-    });
-
-    if (statErr) {
-      console.error('Fout bij toevoegen status:', statErr.message);
-      toast('Kon registratie niet afronden', 'err');
-      return;
-    }
-  }
-
-  // 3️⃣ Toon wachtscherm
+  if (!bedrijf||!email||!pass) { err.textContent='Vul alle velden in.'; err.classList.add('show'); return; }
+  if (pass.length<6) { err.textContent='Wachtwoord minimaal 6 tekens.'; err.classList.add('show'); return; }
+  const {error} = await db.auth.signUp({email, password:pass, options:{data:{bedrijfsnaam:bedrijf}}});
+  if (error) { err.textContent=vertaalAuthFout(error.message); err.classList.add('show'); return; }
+  // Toon wachtscherm — gebruiker is aangemeld maar nog niet goedgekeurd
   document.getElementById('authScreen').style.display = 'flex';
   toonAuthTab('wacht');
-  toast('✅ Registratie gelukt, wacht op goedkeuring van admin');
 }
+
+async function uitloggen() {
+  await db.auth.signOut();
+  huidigeBedrijfId = null; huidigGebruiker = null;
+  document.getElementById('app').classList.remove('show');
+  document.getElementById('adminApp').style.display = 'none';
+  document.getElementById('authScreen').style.display = 'flex';
+  toonAuthTab('login');
+}
+
+async function wachtwoordVergeten() {
+  const email = document.getElementById('loginEmail').value.trim();
+  if (!email) { toast('Vul je e-mailadres in het loginveld in','err'); return; }
+  const {error} = await db.auth.resetPasswordForEmail(email);
+  if (error) toast('Fout: '+error.message,'err');
+  else toast('✉️ Reset-link verstuurd naar '+email);
+}
+
+function vertaalAuthFout(msg) {
+  if (msg.includes('Invalid login'))       return 'Onjuist e-mailadres of wachtwoord.';
+  if (msg.includes('already registered'))  return 'Dit e-mailadres is al in gebruik.';
+  if (msg.includes('Email not confirmed')) return 'Bevestig eerst je e-mailadres.';
+  return msg;
+}
+
+// ── AUTH STATE LISTENER ──
+db.auth.onAuthStateChange(async (event, session) => {
+  if (!session?.user) return;
+
+  huidigGebruiker = session.user;
+  const email = session.user.email || '';
+
+  // Controleer goedkeuringsstatus
+  const {data: statusData} = await db.rpc('mijn_goedkeuring_status');
+  const goedkeuringsStatus = statusData;
+
+  // Verberg auth scherm
+  document.getElementById('authScreen').style.display = 'none';
+
+  // Is dit de admin?
+  const {data: adminCheck} = await db.rpc('is_admin');
+
+  if (adminCheck) {
+    // Admin: toon admin paneel
+    document.getElementById('adminApp').style.display = 'block';
+    document.getElementById('app').classList.remove('show');
+    laadAdminPaneel();
+    return;
+  }
+
+  if (goedkeuringsStatus === 'goedgekeurd') {
+    // Gewone goedgekeurde gebruiker: toon de app
+    await laadBedrijfId();
+    document.getElementById('app').classList.add('show');
+    document.getElementById('sidebarEmail').textContent = email;
+    document.getElementById('avatarLetter').textContent = (email[0]||'?').toUpperCase();
+    renderAll();
+  } else if (goedkeuringsStatus === 'geweigerd') {
+    document.getElementById('authScreen').style.display = 'flex';
+    toonAuthTab('geweigerd');
+  } else {
+    // Wachtend of onbekend
+    document.getElementById('authScreen').style.display = 'flex';
+    toonAuthTab('wacht');
+  }
+});
+
 async function laadBedrijfId() {
   const {data} = await db.from('bedrijven').select('id').eq('user_id', huidigGebruiker.id).single();
   huidigeBedrijfId = data?.id || null;
