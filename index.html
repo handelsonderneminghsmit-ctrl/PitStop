@@ -615,21 +615,13 @@ tr:last-child td{border-bottom:none;}
 
 <script>
 // ══════════════════════════════════════════════════════════
-//  SUPABASE INIT
+//  SUPABASE INIT — alleen voor registratie/auth
 // ══════════════════════════════════════════════════════════
 const { createClient } = supabase;
+const dbAuth = createClient(SUPABASE_URL, SUPABASE_ANON, {
+  auth: { persistSession: false, autoRefreshToken: false }
+});
 
-// Maak een nieuwe db client aan met het huidige access token
-function maakDbClient(accessToken) {
-  return createClient(SUPABASE_URL, SUPABASE_ANON, {
-    global: {
-      headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {}
-    },
-    auth: { persistSession: false, autoRefreshToken: false }
-  });
-}
-
-let db = maakDbClient(null);
 window._accessToken = null;
 
 let huidigeBedrijfId = null;
@@ -638,6 +630,74 @@ let lines = [];
 let factuurType = null;
 let cachedKlanten  = [];
 let cachedProducten = [];
+
+// ── FETCH HELPERS ──
+function authHeaders(extra={}) {
+  return {
+    'Content-Type': 'application/json',
+    'apikey': SUPABASE_ANON,
+    'Authorization': `Bearer ${window._accessToken || ''}`,
+    ...extra
+  };
+}
+
+async function dbGet(tabel, params='') {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${tabel}${params}`, { headers: authHeaders({'Prefer':'return=representation'}) });
+  const text = await res.text();
+  return text ? JSON.parse(text) : [];
+}
+
+async function dbGetOne(tabel, params='') {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${tabel}${params}`, { headers: authHeaders({'Accept':'application/vnd.pgrst.object+json'}) });
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
+}
+
+async function dbCount(tabel, params='') {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${tabel}${params}`, {
+    headers: authHeaders({'Prefer':'count=exact', 'Accept':'application/vnd.pgrst.object+json'})
+  });
+  return parseInt(res.headers.get('content-range')?.split('/')[1] || '0');
+}
+
+async function dbInsert(tabel, body) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${tabel}`, {
+    method: 'POST',
+    headers: authHeaders({'Prefer':'return=representation'}),
+    body: JSON.stringify(body)
+  });
+  const text = await res.text();
+  const data = text ? JSON.parse(text) : null;
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return Array.isArray(data) ? data[0] : data;
+}
+
+async function dbUpdate(tabel, params, body) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${tabel}${params}`, {
+    method: 'PATCH',
+    headers: authHeaders({'Prefer':'return=representation'}),
+    body: JSON.stringify(body)
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(text);
+  return text ? JSON.parse(text) : null;
+}
+
+async function dbDelete(tabel, params) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${tabel}${params}`, {
+    method: 'DELETE', headers: authHeaders()
+  });
+  if (!res.ok) { const t = await res.text(); throw new Error(t); }
+}
+
+async function rpc(functie, params={}) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${functie}`, {
+    method: 'POST', headers: authHeaders(), body: JSON.stringify(params)
+  });
+  const text = await res.text();
+  const data = text ? JSON.parse(text) : null;
+  return { data, error: res.ok ? null : data };
+}
 
 // ── HELPERS ──
 function eur(v){ return '€'+(+v||0).toFixed(2).replace('.',','); }
@@ -685,50 +745,65 @@ async function inloggen() {
   const err   = document.getElementById('loginErr');
   err.classList.remove('show');
   if (!email||!pass) { err.textContent='Vul email en wachtwoord in.'; err.classList.add('show'); return; }
-
   try {
     const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
       method: 'POST',
-      headers: {'Content-Type': 'application/json', 'apikey': SUPABASE_ANON},
+      headers: {'Content-Type':'application/json','apikey':SUPABASE_ANON},
       body: JSON.stringify({email, password: pass})
     });
     const data = await res.json();
-
-    if (!res.ok || data.error) {
-      err.textContent = vertaalAuthFout(data.error_description || data.msg || 'Inloggen mislukt');
-      err.classList.add('show'); return;
-    }
-
-    // Sla token op en maak nieuwe db client met token
+    if (!res.ok || data.error) { err.textContent=vertaalAuthFout(data.error_description||data.msg||'Inloggen mislukt'); err.classList.add('show'); return; }
     window._accessToken = data.access_token;
-    window.db = maakDbClient(data.access_token);
     await verwerkIngelogdeGebruiker(data.user);
-
-  } catch(e) {
-    err.textContent = 'Verbindingsfout: ' + e.message;
-    err.classList.add('show');
-  }
+  } catch(e) { err.textContent='Verbindingsfout: '+e.message; err.classList.add('show'); }
 }
 
-// Helper: maak headers met access token
-function authHeaders() {
-  return {
-    'Content-Type': 'application/json',
-    'apikey': SUPABASE_ANON,
-    'Authorization': `Bearer ${window._accessToken || ''}`
-  };
+async function registreren() {
+  const bedrijf = document.getElementById('regBedrijf').value.trim();
+  const email   = document.getElementById('regEmail').value.trim();
+  const pass    = document.getElementById('regPass').value;
+  const err     = document.getElementById('regErr');
+  err.classList.remove('show');
+  if (!bedrijf||!email||!pass) { err.textContent='Vul alle velden in.'; err.classList.add('show'); return; }
+  if (pass.length<6) { err.textContent='Wachtwoord minimaal 6 tekens.'; err.classList.add('show'); return; }
+  try {
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json','apikey':SUPABASE_ANON},
+      body: JSON.stringify({email, password:pass, data:{bedrijfsnaam:bedrijf}})
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) { err.textContent=vertaalAuthFout(data.error_description||data.msg||'Registratie mislukt'); err.classList.add('show'); return; }
+    if (data?.id) {
+      // Maak gebruiker_status aan via RPC (SECURITY DEFINER omzeilt RLS)
+      await fetch(`${SUPABASE_URL}/rest/v1/rpc/registreer_gebruiker`, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json','apikey':SUPABASE_ANON},
+        body: JSON.stringify({p_user_id:data.id, p_email:email, p_bedrijfsnaam:bedrijf})
+      });
+    }
+    toonAuthTab('wacht');
+  } catch(e) { err.textContent='Verbindingsfout: '+e.message; err.classList.add('show'); }
 }
 
-// Helper: RPC call via directe fetch
-async function rpc(functie, params={}) {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${functie}`, {
-    method: 'POST',
-    headers: authHeaders(),
-    body: JSON.stringify(params)
+async function uitloggen() {
+  window._accessToken = null;
+  huidigeBedrijfId = null; huidigGebruiker = null;
+  document.getElementById('app').classList.remove('show');
+  document.getElementById('adminApp').style.display = 'none';
+  document.getElementById('authScreen').style.display = 'flex';
+  toonAuthTab('login');
+}
+
+async function wachtwoordVergeten() {
+  const email = document.getElementById('loginEmail').value.trim();
+  if (!email) { toast('Vul je e-mailadres in het loginveld in','err'); return; }
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/recover`, {
+    method:'POST', headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON},
+    body: JSON.stringify({email})
   });
-  const text = await res.text();
-  const data = text ? JSON.parse(text) : null;
-  return {data, error: res.ok ? null : data};
+  if (res.ok) toast('✉️ Reset-link verstuurd naar '+email);
+  else toast('Fout bij versturen reset-link','err');
 }
 
 async function verwerkIngelogdeGebruiker(user) {
@@ -771,35 +846,25 @@ async function registreren() {
   if (!bedrijf||!email||!pass) { err.textContent='Vul alle velden in.'; err.classList.add('show'); return; }
   if (pass.length<6) { err.textContent='Wachtwoord minimaal 6 tekens.'; err.classList.add('show'); return; }
 
-  const {data, error} = await db.auth.signUp({email, password:pass, options:{data:{bedrijfsnaam:bedrijf}}});
-  if (error) { err.textContent=vertaalAuthFout(error.message); err.classList.add('show'); return; }
-
-  if (data?.user) {
-    // Gebruik de service functie via RPC om gebruiker_status aan te maken
-    // Dit werkt ook zonder ingelogd te zijn
-    const {error: rpcErr} = await db.rpc('registreer_gebruiker', {
-      p_user_id    : data.user.id,
-      p_email      : email,
-      p_bedrijfsnaam: bedrijf
+  try {
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
+      method:'POST', headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON},
+      body: JSON.stringify({email, password:pass, data:{bedrijfsnaam:bedrijf}})
     });
-
-    if (rpcErr) {
-      console.error('registreer_gebruiker fout:', rpcErr);
-      // Fallback: probeer directe insert
-      await db.from('gebruiker_status').insert({
-        user_id     : data.user.id,
-        email       : email,
-        bedrijfsnaam: bedrijf,
-        status      : 'wachtend'
+    const data = await res.json();
+    if (!res.ok||data.error) { err.textContent=vertaalAuthFout(data.error_description||data.msg||'Registratie mislukt'); err.classList.add('show'); return; }
+    if (data?.id) {
+      await fetch(`${SUPABASE_URL}/rest/v1/rpc/registreer_gebruiker`, {
+        method:'POST', headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON},
+        body: JSON.stringify({p_user_id:data.id, p_email:email, p_bedrijfsnaam:bedrijf})
       });
     }
-  }
-
-  toonAuthTab('wacht');
+    toonAuthTab('wacht');
+  } catch(e) { err.textContent='Verbindingsfout: '+e.message; err.classList.add('show'); }
 }
 
 async function uitloggen() {
-  await db.auth.signOut();
+  window._accessToken = null;
   huidigeBedrijfId = null; huidigGebruiker = null;
   document.getElementById('app').classList.remove('show');
   document.getElementById('adminApp').style.display = 'none';
@@ -810,9 +875,12 @@ async function uitloggen() {
 async function wachtwoordVergeten() {
   const email = document.getElementById('loginEmail').value.trim();
   if (!email) { toast('Vul je e-mailadres in het loginveld in','err'); return; }
-  const {error} = await db.auth.resetPasswordForEmail(email);
-  if (error) toast('Fout: '+error.message,'err');
-  else toast('✉️ Reset-link verstuurd naar '+email);
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/recover`, {
+    method:'POST', headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON},
+    body: JSON.stringify({email})
+  });
+  if (res.ok) toast('✉️ Reset-link verstuurd naar '+email);
+  else toast('Fout bij versturen reset-link','err');
 }
 
 function vertaalAuthFout(msg) {
@@ -822,16 +890,17 @@ function vertaalAuthFout(msg) {
   return msg;
 }
 
-// ── AUTH STATE LISTENER ──
-db.auth.onAuthStateChange(async (event, session) => {
-  if (event === 'SIGNED_IN' && session?.user) {
+// ── AUTH STATE LISTENER (alleen voor paginaherladen) ──
+dbAuth.auth.onAuthStateChange(async (event, session) => {
+  if (event === 'SIGNED_IN' && session?.user && !window._accessToken) {
+    window._accessToken = session.access_token;
     await verwerkIngelogdeGebruiker(session.user);
   }
 });
 
 async function laadBedrijfId() {
-  const {data} = await db.from('bedrijven').select('id').eq('user_id', huidigGebruiker.id).single();
-  huidigeBedrijfId = data?.id || null;
+  const data = await dbGet('bedrijven', `?select=id&user_id=eq.${huidigGebruiker.id}`);
+  huidigeBedrijfId = Array.isArray(data) ? (data[0]?.id || null) : (data?.id || null);
 }
 
 // ══════════════════════════════════════════════════════════
@@ -940,18 +1009,18 @@ function showTab(id){
 // ══════════════════════════════════════════════════════════
 async function renderDashboard(){
   if(!huidigeBedrijfId) return;
-  const [f,k,p]=await Promise.all([
-    db.from('facturen').select('tot_incl').eq('bedrijf_id',huidigeBedrijfId),
-    db.from('klanten').select('id',{count:'exact',head:true}).eq('bedrijf_id',huidigeBedrijfId),
-    db.from('producten').select('id',{count:'exact',head:true}).eq('bedrijf_id',huidigeBedrijfId),
+  const [facturen, klanten, producten] = await Promise.all([
+    dbGet('facturen', `?select=tot_incl&bedrijf_id=eq.${huidigeBedrijfId}`),
+    dbGet('klanten',  `?select=id&bedrijf_id=eq.${huidigeBedrijfId}`),
+    dbGet('producten',`?select=id&bedrijf_id=eq.${huidigeBedrijfId}`)
   ]);
-  const omzet=(f.data||[]).reduce((a,r)=>a+(+r.tot_incl||0),0);
+  const omzet=(facturen||[]).reduce((a,r)=>a+(+r.tot_incl||0),0);
   document.getElementById('statOmzet').innerHTML=`<small>€</small>${omzet.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,'.')}`;
-  document.getElementById('statFacturen').textContent=(f.data||[]).length;
-  document.getElementById('statKlanten').textContent=k.count||0;
-  document.getElementById('statProducten').textContent=p.count||0;
+  document.getElementById('statFacturen').textContent=(facturen||[]).length;
+  document.getElementById('statKlanten').textContent=(klanten||[]).length;
+  document.getElementById('statProducten').textContent=(producten||[]).length;
 
-  const {data:recent}=await db.from('facturen').select('*').eq('bedrijf_id',huidigeBedrijfId).order('aangemaakt_op',{ascending:false}).limit(5);
+  const recent = await dbGet('facturen', `?select=*&bedrijf_id=eq.${huidigeBedrijfId}&order=aangemaakt_op.desc&limit=5`);
   const container=document.getElementById('recentFacturen');
   if(!recent||recent.length===0){ container.innerHTML='<div class="empty"><div class="empty-icon">📄</div><div class="empty-text">Nog geen facturen</div></div>'; return; }
   container.innerHTML=recent.map(f=>`
@@ -1047,9 +1116,8 @@ async function maakFactuur(){
   const klantNaam=document.getElementById('klantNaam').value.trim();
   if(!klantNaam)      return toast('Vul een klantnaam in','err');
 
-  // Genereer factuurnummer
-  const {count}=await db.from('facturen').select('id',{count:'exact',head:true}).eq('bedrijf_id',huidigeBedrijfId);
-  const nr='F'+String((count||0)+1).padStart(4,'0');
+  const bestaande = await dbGet('facturen', `?select=id&bedrijf_id=eq.${huidigeBedrijfId}`);
+  const nr='F'+String((bestaande.length||0)+1).padStart(4,'0');
 
   const totExcl=round2(lines.reduce((a,l)=>a+l.exclTot,0));
   const totBtw =round2(lines.reduce((a,l)=>a+l.btwTot,0));
@@ -1057,46 +1125,41 @@ async function maakFactuur(){
 
   const factuurData={
     bedrijf_id:huidigeBedrijfId, nr,
-    klant_naam  :klantNaam,
-    klant_adres :document.getElementById('klantAdres').value,
+    klant_naam:klantNaam,
+    klant_adres:document.getElementById('klantAdres').value,
     klant_plaats:document.getElementById('klantPlaats').value,
-    klant_email :document.getElementById('klantEmail').value,
+    klant_email:document.getElementById('klantEmail').value,
     factuur_type:factuurType,
     kenteken:factuurType==='auto'?document.getElementById('kenteken').value:null,
-    merk    :factuurType==='auto'?document.getElementById('merk').value:null,
-    model   :factuurType==='auto'?document.getElementById('model').value:null,
+    merk:factuurType==='auto'?document.getElementById('merk').value:null,
+    model:factuurType==='auto'?document.getElementById('model').value:null,
     bouwjaar:factuurType==='auto'?document.getElementById('bouwjaar').value:null,
     km_stand:factuurType==='auto'?document.getElementById('km').value:null,
     tot_excl:totExcl, tot_btw:totBtw, tot_incl:totIncl,
     datum:new Date().toISOString().slice(0,10)
   };
 
-  const {data:nieuwF,error}=await db.from('facturen').insert(factuurData).select('id').single();
-  if(error||!nieuwF){ toast('Fout bij opslaan factuur','err'); return; }
+  try {
+    const nieuwF = await dbInsert('facturen', factuurData);
+    const regels=lines.map((l,i)=>({
+      factuur_id:nieuwF.id, naam:l.naam, aantal:l.aantal, prijs:l.prijs,
+      btw_type:l.btwType, btw_perc:+l.btwPerc,
+      excl_tot:l.exclTot, btw_tot:l.btwTot, incl_tot:l.inclTot, volgorde:i
+    }));
+    await dbInsert('factuur_regels', regels);
 
-  const regels=lines.map((l,i)=>({
-    factuur_id:nieuwF.id, naam:l.naam, aantal:l.aantal, prijs:l.prijs,
-    btw_type:l.btwType, btw_perc:+l.btwPerc,
-    excl_tot:l.exclTot, btw_tot:l.btwTot, incl_tot:l.inclTot, volgorde:i
-  }));
-  await db.from('factuur_regels').insert(regels);
-
-  // Reset form
-  lines=[];
-  ['klantNaam','klantAdres','klantPlaats','klantEmail','kenteken','merk','model','bouwjaar','km'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
-  document.getElementById('klantSelect').value='';
-  factuurType=null;
-  document.getElementById('typeBtnAuto').classList.remove('selected');
-  document.getElementById('typeBtnDienst').classList.remove('selected');
-  document.getElementById('autoFields').style.display='none';
-  renderLines();
-
-  toast('✅ Factuur '+nr+' aangemaakt');
-  showTab('facturen');
-  // PDF direct downloaden
-  const vollF={...factuurData, id:nieuwF.id, lines:lines.slice()};
-  // Laad regels en genereer PDF
-  downloadPDF(nieuwF.id);
+    lines=[];
+    ['klantNaam','klantAdres','klantPlaats','klantEmail','kenteken','merk','model','bouwjaar','km'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+    document.getElementById('klantSelect').value='';
+    factuurType=null;
+    document.getElementById('typeBtnAuto').classList.remove('selected');
+    document.getElementById('typeBtnDienst').classList.remove('selected');
+    document.getElementById('autoFields').style.display='none';
+    renderLines();
+    toast('✅ Factuur '+nr+' aangemaakt');
+    showTab('facturen');
+    downloadPDF(nieuwF.id);
+  } catch(e) { toast('Fout bij opslaan: '+e.message,'err'); }
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1104,9 +1167,9 @@ async function maakFactuur(){
 // ══════════════════════════════════════════════════════════
 async function renderFacturen(){
   if(!huidigeBedrijfId) return;
-  const {data}=await db.from('facturen').select('*').eq('bedrijf_id',huidigeBedrijfId).order('aangemaakt_op',{ascending:false});
+  const data = await dbGet('facturen', `?select=*&bedrijf_id=eq.${huidigeBedrijfId}&order=aangemaakt_op.desc`);
   const tbody=document.getElementById('factuurBody');
-  if(!data||data.length===0){
+  if(!data||!Array.isArray(data)||data.length===0){
     tbody.innerHTML='<tr><td colspan="6"><div class="empty"><div class="empty-icon">📄</div><div class="empty-text">Nog geen facturen</div></div></td></tr>'; return;
   }
   tbody.innerHTML=data.map(f=>`<tr>
@@ -1125,7 +1188,7 @@ async function renderFacturen(){
 
 async function verwijderFactuur(id){
   if(!confirm('Factuur verwijderen?')) return;
-  await db.from('facturen').delete().eq('id',id);
+  try { await dbDelete('facturen', `?id=eq.${id}`); } catch(e){}
   toast('Factuur verwijderd');
   renderFacturen(); renderDashboard();
 }
@@ -1135,8 +1198,7 @@ async function verwijderFactuur(id){
 // ══════════════════════════════════════════════════════════
 async function renderKlanten(){
   if(!huidigeBedrijfId) return;
-  const {data}=await db.from('klanten').select('*').eq('bedrijf_id',huidigeBedrijfId).order('naam');
-  cachedKlanten=data||[];
+  cachedKlanten = await dbGet('klanten', `?select=*&bedrijf_id=eq.${huidigeBedrijfId}&order=naam`);
   const tbody=document.getElementById('klantenBody');
   tbody.innerHTML=cachedKlanten.length===0
     ?'<tr><td colspan="5"><div class="empty"><div class="empty-icon">👥</div><div class="empty-text">Nog geen klanten</div></div></td></tr>'
@@ -1154,22 +1216,20 @@ async function renderKlanten(){
 async function slaKlantOp(){
   const naam=document.getElementById('mKNaam').value.trim();
   if(!naam) return toast('Vul een naam in','err');
-  const {error}=await db.from('klanten').insert({
-    bedrijf_id:huidigeBedrijfId, naam,
-    adres:document.getElementById('mKAdres').value.trim(),
-    plaats:document.getElementById('mKPlaats').value.trim(),
-    email:document.getElementById('mKEmail').value.trim()
-  });
-  if(error){ toast('Fout: '+error.message,'err'); return; }
-  ['mKNaam','mKAdres','mKPlaats','mKEmail'].forEach(id=>document.getElementById(id).value='');
-  sluitModal('modalKlant');
-  toast('✅ Klant toegevoegd');
-  renderKlanten();
+  try {
+    await dbInsert('klanten', {bedrijf_id:huidigeBedrijfId, naam,
+      adres:document.getElementById('mKAdres').value.trim(),
+      plaats:document.getElementById('mKPlaats').value.trim(),
+      email:document.getElementById('mKEmail').value.trim()
+    });
+    ['mKNaam','mKAdres','mKPlaats','mKEmail'].forEach(id=>document.getElementById(id).value='');
+    sluitModal('modalKlant'); toast('✅ Klant toegevoegd'); renderKlanten();
+  } catch(e){ toast('Fout: '+e.message,'err'); }
 }
 
 async function verwijderKlant(id){
   if(!confirm('Klant verwijderen?')) return;
-  await db.from('klanten').delete().eq('id',id);
+  try { await dbDelete('klanten', `?id=eq.${id}`); } catch(e){}
   toast('Klant verwijderd'); renderKlanten();
 }
 
@@ -1178,8 +1238,7 @@ async function verwijderKlant(id){
 // ══════════════════════════════════════════════════════════
 async function renderProducten(){
   if(!huidigeBedrijfId) return;
-  const {data}=await db.from('producten').select('*').eq('bedrijf_id',huidigeBedrijfId).order('naam');
-  cachedProducten=data||[];
+  cachedProducten = await dbGet('producten', `?select=*&bedrijf_id=eq.${huidigeBedrijfId}&order=naam`);
   const tbody=document.getElementById('productenBody');
   tbody.innerHTML=cachedProducten.length===0
     ?'<tr><td colspan="4"><div class="empty"><div class="empty-icon">🔧</div><div class="empty-text">Nog geen producten</div></div></td></tr>'
@@ -1197,22 +1256,20 @@ async function renderProducten(){
 async function slaProductOp(){
   const naam=document.getElementById('mPNaam').value.trim();
   if(!naam) return toast('Vul een naam in','err');
-  const {error}=await db.from('producten').insert({
-    bedrijf_id:huidigeBedrijfId, naam,
-    prijs:+document.getElementById('mPPrijs').value||0,
-    btw_type:document.getElementById('mPBtwType').value,
-    btw_perc:+document.getElementById('mPBtwPerc').value
-  });
-  if(error){ toast('Fout: '+error.message,'err'); return; }
-  ['mPNaam','mPPrijs'].forEach(id=>document.getElementById(id).value='');
-  sluitModal('modalProduct');
-  toast('✅ Product toegevoegd');
-  renderProducten();
+  try {
+    await dbInsert('producten', {bedrijf_id:huidigeBedrijfId, naam,
+      prijs:+document.getElementById('mPPrijs').value||0,
+      btw_type:document.getElementById('mPBtwType').value,
+      btw_perc:+document.getElementById('mPBtwPerc').value
+    });
+    ['mPNaam','mPPrijs'].forEach(id=>document.getElementById(id).value='');
+    sluitModal('modalProduct'); toast('✅ Product toegevoegd'); renderProducten();
+  } catch(e){ toast('Fout: '+e.message,'err'); }
 }
 
 async function verwijderProduct(id){
   if(!confirm('Product verwijderen?')) return;
-  await db.from('producten').delete().eq('id',id);
+  try { await dbDelete('producten', `?id=eq.${id}`); } catch(e){}
   toast('Product verwijderd'); renderProducten();
 }
 
@@ -1221,7 +1278,7 @@ async function verwijderProduct(id){
 // ══════════════════════════════════════════════════════════
 async function laadInstellingenFormulier(){
   if(!huidigeBedrijfId) return;
-  const {data}=await db.from('bedrijven').select('*').eq('id',huidigeBedrijfId).single();
+  const data = await dbGetOne('bedrijven', `?id=eq.${huidigeBedrijfId}`);
   if(!data) return;
   document.getElementById('sNaam').value =data.naam||'';
   document.getElementById('sEmail').value=data.email||'';
@@ -1235,27 +1292,29 @@ async function laadInstellingenFormulier(){
 }
 
 async function slaInstellingenOp(){
-  const {error}=await db.from('bedrijven').update({
-    naam         :document.getElementById('sNaam').value,
-    email        :document.getElementById('sEmail').value,
-    adres        :document.getElementById('sAdres').value,
-    plaats       :document.getElementById('sPlaats').value,
-    btw_nr       :document.getElementById('sBtw').value,
-    kvk_nr       :document.getElementById('sKvk').value,
-    iban         :document.getElementById('sIban').value,
-    telefoon     :document.getElementById('sTel').value,
-    factuur_tekst:document.getElementById('sTekst').value
-  }).eq('id',huidigeBedrijfId);
-
-  if(error){ toast('Fout bij opslaan: '+error.message,'err'); return; }
-
-  const nieuwPass=document.getElementById('sNieuwPass').value;
-  if(nieuwPass){
-    const {error:pe}=await db.auth.updateUser({password:nieuwPass});
-    if(pe) toast('Fout wachtwoord: '+pe.message,'err');
-    else { document.getElementById('sNieuwPass').value=''; toast('✅ Instellingen + wachtwoord opgeslagen'); return; }
-  }
-  toast('✅ Instellingen opgeslagen');
+  try {
+    await dbUpdate('bedrijven', `?id=eq.${huidigeBedrijfId}`, {
+      naam:document.getElementById('sNaam').value,
+      email:document.getElementById('sEmail').value,
+      adres:document.getElementById('sAdres').value,
+      plaats:document.getElementById('sPlaats').value,
+      btw_nr:document.getElementById('sBtw').value,
+      kvk_nr:document.getElementById('sKvk').value,
+      iban:document.getElementById('sIban').value,
+      telefoon:document.getElementById('sTel').value,
+      factuur_tekst:document.getElementById('sTekst').value
+    });
+    const nieuwPass=document.getElementById('sNieuwPass').value;
+    if(nieuwPass){
+      const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+        method:'PUT', headers:authHeaders(), body: JSON.stringify({password:nieuwPass})
+      });
+      if(!res.ok){ toast('Fout bij wachtwoord wijzigen','err'); return; }
+      document.getElementById('sNieuwPass').value='';
+      toast('✅ Instellingen + wachtwoord opgeslagen'); return;
+    }
+    toast('✅ Instellingen opgeslagen');
+  } catch(e){ toast('Fout bij opslaan: '+e.message,'err'); }
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1281,13 +1340,13 @@ async function zoekAdres(){
 // ══════════════════════════════════════════════════════════
 async function downloadPDF(factuurId){
   if(!huidigeBedrijfId) return;
-  const [{data:f},{data:regels},{data:bedrijf}]=await Promise.all([
-    db.from('facturen').select('*').eq('id',factuurId).single(),
-    db.from('factuur_regels').select('*').eq('factuur_id',factuurId).order('volgorde'),
-    db.from('bedrijven').select('*').eq('id',huidigeBedrijfId).single()
+  const [f, regels, bedrijf]=await Promise.all([
+    dbGetOne('facturen', `?id=eq.${factuurId}`),
+    dbGet('factuur_regels', `?factuur_id=eq.${factuurId}&order=volgorde`),
+    dbGetOne('bedrijven', `?id=eq.${huidigeBedrijfId}`)
   ]);
   if(!f||!bedrijf) return toast('Kan factuur niet laden','err');
-  genereerPDF(f, regels||[], bedrijf);
+  genereerPDF(f, Array.isArray(regels)?regels:[], bedrijf);
 }
 
 function genereerPDF(f, regels, S){
