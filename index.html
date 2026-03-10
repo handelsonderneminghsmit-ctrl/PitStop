@@ -2020,17 +2020,19 @@ function genereerPDF(f, regels, S){
   y+=9;
 
   regels.forEach((l,idx)=>{
-    y=checkPage(y,10);
-    if(idx%2===0){ doc.setFillColor(250,250,252); doc.rect(ML,y,CW,9,'F'); }
+    y=checkPage(y,12);
     const isMarge=l.btw_type==='marge';
+    const rh = (isAutoType && isMarge) ? 12 : 9;
+    if(idx%2===0){ doc.setFillColor(250,250,252); doc.rect(ML,y,CW,rh,'F'); }
     setBody(8.5);
     if(isAutoType){
-      doc.text(l.naam.substring(0,80), C_DESC, y+6);
+      doc.text(l.naam.substring(0,80), C_DESC, y+5);
       if(isMarge){
         doc.setFontSize(6.5); doc.setTextColor(cr,cg,cb);
-        doc.text('margeregeling', C_DESC+doc.getTextWidth(l.naam.substring(0,80))+1.5, y+6);
+        doc.text('margeregeling', C_DESC, y+9.5);
+        doc.setFontSize(8.5); doc.setTextColor(25,25,25);
       }
-      doc.setFontSize(8.5); doc.setFont('helvetica','bold'); doc.setTextColor(25,25,25);
+      doc.setFont('helvetica','bold'); doc.setTextColor(25,25,25);
       doc.text(fmt(l.incl_tot), C_INCL, y+6, {align:'right'});
     } else {
       doc.text(l.naam.substring(0,52), C_DESC, y+6);
@@ -2041,8 +2043,8 @@ function genereerPDF(f, regels, S){
       doc.setFont('helvetica','bold'); doc.setTextColor(25,25,25);
       doc.text(fmt(l.incl_tot), C_INCL, y+6, {align:'right'});
     }
-    doc.setDrawColor(232,232,235); doc.setLineWidth(0.2); doc.line(ML,y+9,MR,y+9);
-    y+=9;
+    doc.setDrawColor(232,232,235); doc.setLineWidth(0.2); doc.line(ML,y+rh,MR,y+rh);
+    y+=rh;
   });
 
   // ════════════════════════════════
