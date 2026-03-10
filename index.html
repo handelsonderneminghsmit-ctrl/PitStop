@@ -687,16 +687,8 @@ async function inloggen() {
       err.classList.add('show'); return;
     }
 
-    // Sla token op zodat Supabase client het gebruikt voor volgende requests
-    localStorage.setItem('sb-access-token', data.access_token);
-    localStorage.setItem('sb-refresh-token', data.refresh_token);
-
-    // Herstart de Supabase client met de nieuwe sessie
-    const {createClient} = supabase;
-    window.db = createClient(SUPABASE_URL, SUPABASE_ANON, {
-      global: { headers: { Authorization: `Bearer ${data.access_token}` } }
-    });
-
+    // Sla token op voor gebruik in API calls
+    window._accessToken = data.access_token;
     await verwerkIngelogdeGebruiker(data.user);
 
   } catch(e) {
@@ -705,16 +697,36 @@ async function inloggen() {
   }
 }
 
+// Helper: maak headers met access token
+function authHeaders() {
+  return {
+    'Content-Type': 'application/json',
+    'apikey': SUPABASE_ANON,
+    'Authorization': `Bearer ${window._accessToken || ''}`
+  };
+}
+
+// Helper: RPC call via directe fetch
+async function rpc(functie, params={}) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${functie}`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(params)
+  });
+  const data = await res.json();
+  return {data, error: res.ok ? null : data};
+}
+
 async function verwerkIngelogdeGebruiker(user) {
   huidigGebruiker = user;
   const email = user.email || '';
 
-  const {data: statusData} = await db.rpc('mijn_goedkeuring_status');
-  const {data: adminCheck} = await db.rpc('is_admin');
+  const {data: statusData} = await rpc('mijn_goedkeuring_status');
+  const {data: adminCheck} = await rpc('is_admin');
 
   document.getElementById('authScreen').style.display = 'none';
 
-  if (adminCheck) {
+  if (adminCheck === true) {
     document.getElementById('adminApp').style.display = 'block';
     document.getElementById('app').classList.remove('show');
     laadAdminPaneel();
@@ -879,16 +891,16 @@ async function filterAdmin(filter) {
 }
 
 async function keurGoed(userId) {
-  const {error} = await db.rpc('keur_goed', {doel_user_id: userId});
-  if (error) { toast('Fout: '+error.message, 'err'); return; }
+  const {error} = await rpc('keur_goed', {doel_user_id: userId});
+  if (error) { toast('Fout: '+JSON.stringify(error), 'err'); return; }
   toast('✅ Gebruiker goedgekeurd');
   filterAdmin(adminFilter);
 }
 
 async function weiger(userId) {
   if (!confirm('Weet je zeker dat je deze gebruiker wilt weigeren?')) return;
-  const {error} = await db.rpc('weiger', {doel_user_id: userId});
-  if (error) { toast('Fout: '+error.message, 'err'); return; }
+  const {error} = await rpc('weiger', {doel_user_id: userId});
+  if (error) { toast('Fout: '+JSON.stringify(error), 'err'); return; }
   toast('Gebruiker geweigerd');
   filterAdmin(adminFilter);
 }
