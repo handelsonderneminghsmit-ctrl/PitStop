@@ -831,7 +831,6 @@ async function laadAdminPaneel() {
 
 async function filterAdmin(filter) {
   adminFilter = filter;
-  // Update filter knop stijlen
   ['wachtend','goedgekeurd','geweigerd','alles'].forEach(f => {
     const btn = document.getElementById('filterBtn-'+f);
     if (!btn) return;
@@ -846,11 +845,12 @@ async function filterAdmin(filter) {
     }
   });
 
-  // Laad alle gebruikers
-  const {data: alles} = await db.from('gebruiker_status').select('*').order('aangevraagd_op', {ascending:false});
-  if (!alles) return;
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/gebruiker_status?select=*&order=aangevraagd_op.desc`, {
+    headers: authHeaders()
+  });
+  const alles = await res.json();
+  if (!Array.isArray(alles)) { toast('Fout bij laden gebruikers', 'err'); return; }
 
-  // Update stats
   document.getElementById('adminStatWacht').textContent = alles.filter(u=>u.status==='wachtend').length;
   document.getElementById('adminStatGoed').textContent  = alles.filter(u=>u.status==='goedgekeurd').length;
   document.getElementById('adminStatWeig').textContent  = alles.filter(u=>u.status==='geweigerd').length;
