@@ -501,7 +501,28 @@ tr:last-child td{border-bottom:none;}
               <div class="form-group"><label>Brandstof</label><select id="brandstof"><option>Benzine</option><option>Diesel</option><option>Elektrisch</option><option>Hybride</option><option>LPG</option></select></div>
               <div class="form-group"><label>Transmissie</label><select id="transmissie"><option>Handgeschakeld</option><option>Automaat</option></select></div>
               <div class="form-group"><label>Vermogen (kW / PK)</label><input id="vermogen" placeholder="51 kW / 69 PK"></div>
-              <div id="autoprijsVeld"><div class="form-group"><label id="autoprijsLabel">Verkoopprijs (marge)</label><input id="autoprijs" type="number" placeholder="1500.00" step="0.01"></div></div>
+              <div id="autoprijsVeld">
+                <div class="form-group">
+                  <label id="autoprijsLabel">Verkoopprijs</label>
+                  <input id="autoprijs" type="number" placeholder="1500.00" step="0.01">
+                </div>
+                <div class="form-group">
+                  <label>Prijstype</label>
+                  <select id="autoBtwType" onchange="updateAutoprijsLabel()">
+                    <option value="marge">Margeregeling</option>
+                    <option value="excl">Excl. BTW</option>
+                    <option value="incl">Incl. BTW</option>
+                  </select>
+                </div>
+                <div class="form-group" id="autoBtwPercVeld" style="display:none">
+                  <label>BTW %</label>
+                  <select id="autoBtwPerc">
+                    <option value="21">21%</option>
+                    <option value="9">9%</option>
+                    <option value="0">0%</option>
+                  </select>
+                </div>
+              </div>
             </div>
             <div class="divider"></div>
             <div class="card-title" style="margin-bottom:8px">Extra regels <span style="font-size:12px;color:var(--text3);font-weight:400">(optioneel)</span></div>
@@ -1250,6 +1271,15 @@ function selectType(type){
 }
 
 let inkoopAutoOpen = false;
+function updateAutoprijsLabel(){
+  const type = document.getElementById('autoBtwType')?.value;
+  const labels = {marge:'Verkoopprijs (margeregeling)', excl:'Prijs excl. BTW', incl:'Prijs incl. BTW'};
+  const el = document.getElementById('autoprijsLabel');
+  if(el) el.textContent = labels[type]||'Prijs';
+  const percVeld = document.getElementById('autoBtwPercVeld');
+  if(percVeld) percVeld.style.display = (type==='excl'||type==='incl') ? 'block' : 'none';
+}
+
 function toggleInkoopAuto(){
   inkoopAutoOpen = !inkoopAutoOpen;
   document.getElementById('autoFields').style.display = inkoopAutoOpen ? 'block' : 'none';
@@ -1333,14 +1363,23 @@ async function maakFactuur(){
   if(isAuto){
     const autoprijs = +document.getElementById('autoprijs').value;
     if(!autoprijs||autoprijs<=0) return toast('Vul een verkoopprijs in','err');
+    const autoBtwType = document.getElementById('autoBtwType')?.value||'marge';
+    const autoBtwPerc = +(document.getElementById('autoBtwPerc')?.value||21);
     const merk = document.getElementById('merk').value.trim();
     const kenteken = document.getElementById('kenteken').value.trim();
     const autoNaam = [merk, kenteken ? `(${kenteken})` : ''].filter(Boolean).join(' ');
+    let exclTot, btwTot, inclTot;
+    if(autoBtwType==='marge'){
+      exclTot=autoprijs; btwTot=0; inclTot=autoprijs;
+    } else if(autoBtwType==='excl'){
+      exclTot=autoprijs; btwTot=round2(autoprijs*autoBtwPerc/100); inclTot=round2(exclTot+btwTot);
+    } else { // incl
+      inclTot=autoprijs; exclTot=round2(autoprijs/(1+autoBtwPerc/100)); btwTot=round2(inclTot-exclTot);
+    }
     factuurLines = [{
-      naam: autoNaam || 'Auto',
-      aantal: 1, prijs: autoprijs,
-      btwType: 'marge', btwPerc: 0,
-      exclTot: autoprijs, btwTot: 0, inclTot: autoprijs
+      naam: autoNaam||'Auto', aantal:1, prijs:autoprijs,
+      btwType:autoBtwType, btwPerc:autoBtwType==='marge'?0:autoBtwPerc,
+      exclTot, btwTot, inclTot
     }, ...lines];
   } else if(isInkoop){
     // Inkoop: regels zijn verplicht, auto velden optioneel
@@ -1348,13 +1387,23 @@ async function maakFactuur(){
     // Als voertuig ingevuld, voeg toe als eerste regel met negatief bedrag
     const autoprijs = +document.getElementById('autoprijs').value;
     if(inkoopAutoOpen && autoprijs > 0){
+      const autoBtwType = document.getElementById('autoBtwType')?.value||'marge';
+      const autoBtwPerc = +(document.getElementById('autoBtwPerc')?.value||21);
       const merk = document.getElementById('merk').value.trim();
       const kenteken = document.getElementById('kenteken').value.trim();
       const autoNaam = [merk, kenteken?`(${kenteken})`:''].filter(Boolean).join(' ') || 'Voertuig';
+      let exclTot, btwTot, inclTot;
+      if(autoBtwType==='marge'){
+        exclTot=-autoprijs; btwTot=0; inclTot=-autoprijs;
+      } else if(autoBtwType==='excl'){
+        exclTot=-autoprijs; btwTot=-round2(autoprijs*autoBtwPerc/100); inclTot=round2(exclTot+btwTot);
+      } else {
+        inclTot=-autoprijs; exclTot=-round2(autoprijs/(1+autoBtwPerc/100)); btwTot=round2(inclTot-exclTot);
+      }
       factuurLines = [{
-        naam: autoNaam, aantal: 1, prijs: autoprijs,
-        btwType: 'marge', btwPerc: 0,
-        exclTot: -autoprijs, btwTot: 0, inclTot: -autoprijs
+        naam: autoNaam, aantal:1, prijs:autoprijs,
+        btwType:autoBtwType, btwPerc:autoBtwType==='marge'?0:autoBtwPerc,
+        exclTot, btwTot, inclTot
       }, ...lines.map(l=>({...l, exclTot:-Math.abs(l.exclTot), btwTot:-Math.abs(l.btwTot), inclTot:-Math.abs(l.inclTot)}))];
     } else {
       factuurLines = lines.map(l=>({...l, exclTot:-Math.abs(l.exclTot), btwTot:-Math.abs(l.btwTot), inclTot:-Math.abs(l.inclTot)}));
@@ -1443,6 +1492,7 @@ async function maakFactuur(){
     ['klantNaam','klantAdres','klantPlaats','klantEmail','kenteken','merk','meldcode','eersteToelating',
      'apkVervaldatum','km','vermogen','autoprijs','verkoperBsn','verkoperLegNr','creditRefNr','creditReden']
       .forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+    const abt=document.getElementById('autoBtwType'); if(abt){abt.value='marge'; updateAutoprijsLabel();}
     document.getElementById('klantSelect').value='';
     factuurType=null;
     ['auto','dienst','inkoop','credit'].forEach(t=>{
