@@ -788,10 +788,16 @@ tr:last-child td{border-bottom:none;}
         <div class="page-title">Producten &amp; <span>Diensten</span></div>
         <button class="btn btn-primary" onclick="openModal('modalProduct')">➕ Nieuw product</button>
       </div>
+      <div class="card" style="padding:12px 16px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <input id="zoekProduct" placeholder="🔍 Zoek product..." oninput="filterProducten()" style="flex:1;min-width:180px">
+        <select id="filterProductCat" onchange="filterProducten()" style="width:180px">
+          <option value="">Alle categorieën</option>
+        </select>
+      </div>
       <div class="card" style="padding:0">
         <div class="table-wrap">
-          <table id="productenTabel"><thead><tr><th>Naam</th><th>Prijs</th><th>BTW</th><th>Acties</th></tr></thead>
-          <tbody id="productenBody"><tr><td colspan="4"><div class="loading"><div class="spinner"></div></div></td></tr></tbody></table>
+          <table id="productenTabel"><thead><tr><th>Naam</th><th>Categorie</th><th>Prijs</th><th>BTW</th><th>Acties</th></tr></thead>
+          <tbody id="productenBody"><tr><td colspan="5"><div class="loading"><div class="spinner"></div></div></td></tr></tbody></table>
         </div>
       </div>
     </section>
@@ -991,12 +997,13 @@ tr:last-child td{border-bottom:none;}
     <section id="resultaten">
       <div class="page-header">
         <div class="page-title">Resultaten<span>rekening</span></div>
-        <div style="display:flex;gap:8px;align-items:center">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <input id="resVan" type="date" onchange="renderResultaten()" style="width:140px">
           <span style="color:var(--text3)">t/m</span>
           <input id="resTot" type="date" onchange="renderResultaten()" style="width:140px">
-          <select id="resJaar" onchange="setResultatenJaar()" style="width:120px">
-          </select>
+          <select id="resJaar" onchange="setResultatenJaar()" style="width:120px"></select>
+          <button class="btn btn-primary btn-sm" onclick="exportResultatenExcel()">📊 Excel</button>
+          <button class="btn btn-sec btn-sm" onclick="exportResultatenPDF()">📄 PDF</button>
         </div>
       </div>
 
@@ -1118,17 +1125,63 @@ tr:last-child td{border-bottom:none;}
           </div>
         </div>
 
+        <!-- Kas / Bank -->
+        <div class="card">
+          <div style="font-size:22px;margin-bottom:8px">💰</div>
+          <div class="card-title">Kas &amp; Bank</div>
+          <p style="font-size:13px;color:var(--text3);margin:6px 0 14px">Alle kas- en bankmutaties met saldo per regel.</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-primary btn-sm" onclick="exportKasBankExcel()">📊 Excel</button>
+            <button class="btn btn-sec btn-sm" onclick="exportKasBankPDF()">📄 PDF</button>
+          </div>
+        </div>
+
+        <!-- Uren -->
+        <div class="card">
+          <div style="font-size:22px;margin-bottom:8px">⏱️</div>
+          <div class="card-title">Urenregistratie</div>
+          <p style="font-size:13px;color:var(--text3);margin:6px 0 14px">Alle uren per klant en project met tarief en status.</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-primary btn-sm" onclick="exportUrenExcel()">📊 Excel</button>
+            <button class="btn btn-sec btn-sm" onclick="exportUrenPDF()">📄 PDF</button>
+          </div>
+        </div>
+
         <!-- Alles in één -->
         <div class="card" style="border-color:var(--accent)">
           <div style="font-size:22px;margin-bottom:8px">📦</div>
           <div class="card-title" style="color:var(--accent)">Alles exporteren</div>
-          <p style="font-size:13px;color:var(--text3);margin:6px 0 14px">Facturen + inkopen + BTW in één Excel bestand met meerdere tabbladen.</p>
+          <p style="font-size:13px;color:var(--text3);margin:6px 0 14px">Facturen + inkopen + BTW + kas/bank + uren in één Excel met meerdere tabbladen.</p>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <button class="btn btn-primary" onclick="exportAllesExcel()">📊 Alles naar Excel</button>
           </div>
         </div>
 
       </div>
+
+      <!-- BACKUP -->
+      <div class="card" style="margin-top:8px">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+          <div style="font-size:28px">🗄️</div>
+          <div>
+            <div class="card-title" style="margin:0">Volledige data backup</div>
+            <div style="font-size:13px;color:var(--text3);margin-top:3px">Download al je gegevens als JSON bestand. Gebruik dit als veilige kopie van je volledige administratie.</div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-bottom:16px">
+          <div style="background:var(--bg3);border-radius:8px;padding:10px;text-align:center"><div style="font-size:11px;color:var(--text3)">Facturen</div><div style="font-weight:700;color:var(--text1)" id="bkStatF">—</div></div>
+          <div style="background:var(--bg3);border-radius:8px;padding:10px;text-align:center"><div style="font-size:11px;color:var(--text3)">Klanten</div><div style="font-weight:700;color:var(--text1)" id="bkStatK">—</div></div>
+          <div style="background:var(--bg3);border-radius:8px;padding:10px;text-align:center"><div style="font-size:11px;color:var(--text3)">Inkopen</div><div style="font-weight:700;color:var(--text1)" id="bkStatI">—</div></div>
+          <div style="background:var(--bg3);border-radius:8px;padding:10px;text-align:center"><div style="font-size:11px;color:var(--text3)">Kas/Bank</div><div style="font-weight:700;color:var(--text1)" id="bkStatKB">—</div></div>
+          <div style="background:var(--bg3);border-radius:8px;padding:10px;text-align:center"><div style="font-size:11px;color:var(--text3)">Uren</div><div style="font-weight:700;color:var(--text1)" id="bkStatU">—</div></div>
+          <div style="background:var(--bg3);border-radius:8px;padding:10px;text-align:center"><div style="font-size:11px;color:var(--text3)">Producten</div><div style="font-weight:700;color:var(--text1)" id="bkStatP">—</div></div>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+          <button class="btn btn-primary" onclick="maakBackup()">💾 Backup downloaden</button>
+          <div style="font-size:12px;color:var(--text3)">Bestandsnaam: backup_[bedrijfsnaam]_[datum].json</div>
+        </div>
+      </div>
+
     </section>
 
     <!-- UPGRADE -->
@@ -1630,11 +1683,20 @@ tr:last-child td{border-bottom:none;}
 <div class="modal-backdrop" id="modalProduct">
   <div class="modal">
     <div class="modal-handle"></div>
-    <div class="modal-title">Nieuw product / dienst</div>
+    <div class="modal-title" id="productModalTitel">Nieuw product / dienst</div>
     <div class="form-group"><label>Naam *</label><input id="mPNaam" placeholder="Productnaam"></div>
+    <div class="form-group"><label>Categorie</label>
+      <div style="display:flex;gap:8px">
+        <select id="mPCatSelect" onchange="document.getElementById('mPCat').value=this.value" style="flex:1">
+          <option value="">— Kies of typ nieuw —</option>
+        </select>
+        <input id="mPCat" placeholder="Nieuwe categorie" style="flex:1">
+      </div>
+    </div>
     <div class="form-group"><label>Prijs</label><input id="mPPrijs" type="number" placeholder="0.00" step="0.01"></div>
     <div class="form-group"><label>BTW type</label><select id="mPBtwType"><option value="excl">Excl. BTW</option><option value="incl">Incl. BTW</option><option value="marge">Marge</option></select></div>
     <div class="form-group"><label>BTW %</label><select id="mPBtwPerc"><option value="21">21%</option><option value="9">9%</option><option value="0">0%</option></select></div>
+    <div class="form-group"><label>Omschrijving <span style="color:var(--text3);font-weight:400">optioneel</span></label><input id="mPOmschr" placeholder="Korte beschrijving"></div>
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="sluitModal('modalProduct')">Annuleren</button>
       <button class="btn btn-primary" onclick="slaProductOp()">Opslaan</button>
@@ -2057,7 +2119,7 @@ function showTab(id){
   if(id==='inkopen')      renderInkopen();
   if(id==='kasbank')      renderKasBank();
   if(id==='resultaten')   initResultaten();
-  if(id==='export')       initExportForm();
+  if(id==='export')       { initExportForm(); laadBackupStats(); }
   if(id==='klanten')      renderKlanten();
   if(id==='producten')    renderProducten();
   if(id==='offerte')      initOfferteForm();
@@ -2944,32 +3006,131 @@ async function verwijderKlant(id){
 // ══════════════════════════════════════════════════════════
 async function renderProducten(){
   if(!huidigeBedrijfId) return;
-  cachedProducten = await dbGet('producten', `?select=*&bedrijf_id=eq.${huidigeBedrijfId}&order=naam`);
-  const tbody=document.getElementById('productenBody');
-  tbody.innerHTML=cachedProducten.length===0
-    ?'<tr><td colspan="4"><div class="empty"><div class="empty-icon">🔧</div><div class="empty-text">Nog geen producten</div></div></td></tr>'
-    :cachedProducten.map(p=>`<tr>
-        <td style="color:var(--text);font-weight:500">${p.naam}</td>
-        <td>${eur(p.prijs)}</td>
-        <td><span class="badge badge-${p.btw_type==='marge'?'marge':'dienst'}">${p.btw_type} ${p.btw_perc}%</span></td>
-        <td><button class="btn btn-danger btn-sm" onclick="verwijderProduct('${p.id}')">✕</button></td>
-      </tr>`).join('');
+  cachedProducten = await dbGet('producten', `?select=*&bedrijf_id=eq.${huidigeBedrijfId}&order=categorie,naam`)||[];
+
+  // Categorieën vullen in filter en modal
+  const cats = [...new Set(cachedProducten.map(p=>p.categorie).filter(Boolean))].sort();
+  const filterSel = document.getElementById('filterProductCat');
+  const modalSel  = document.getElementById('mPCatSelect');
+  if(filterSel){
+    const huidigFilter = filterSel.value;
+    filterSel.innerHTML = '<option value="">Alle categorieën</option>';
+    cats.forEach(c=>{ const o=document.createElement('option'); o.value=c; o.textContent=c; filterSel.appendChild(o); });
+    filterSel.value = huidigFilter;
+  }
+  if(modalSel){
+    modalSel.innerHTML = '<option value="">— Kies of typ nieuw —</option>';
+    cats.forEach(c=>{ const o=document.createElement('option'); o.value=c; o.textContent=c; modalSel.appendChild(o); });
+  }
+
+  filterProducten();
+
+  // Productselect in factuurformulier bijwerken
   const sel=document.getElementById('productSelect');
-  sel.innerHTML='<option value="">— Selecteer product —</option>';
-  cachedProducten.forEach(p=>{ const o=document.createElement('option'); o.value=p.id; o.text=p.naam; sel.add(o); });
+  if(sel){
+    sel.innerHTML='<option value="">— Selecteer product —</option>';
+    // Groepeer per categorie
+    const metCat    = cachedProducten.filter(p=>p.categorie);
+    const zonderCat = cachedProducten.filter(p=>!p.categorie);
+    cats.forEach(cat=>{
+      const og = document.createElement('optgroup'); og.label = cat;
+      metCat.filter(p=>p.categorie===cat).forEach(p=>{
+        const o=document.createElement('option'); o.value=p.id; o.text=p.naam; og.appendChild(o);
+      });
+      sel.appendChild(og);
+    });
+    if(zonderCat.length){
+      const og = document.createElement('optgroup'); og.label = 'Overig';
+      zonderCat.forEach(p=>{ const o=document.createElement('option'); o.value=p.id; o.text=p.naam; og.appendChild(o); });
+      sel.appendChild(og);
+    }
+  }
+
+  // Offerte productselect ook bijwerken
+  const offSel = document.getElementById('offProductSelect');
+  if(offSel){
+    offSel.innerHTML='<option value="">— Selecteer product —</option>';
+    cachedProducten.forEach(p=>{ const o=document.createElement('option'); o.value=JSON.stringify(p); o.text=`${p.categorie?p.categorie+' · ':''}${p.naam}`; offSel.appendChild(o); });
+  }
+}
+
+function filterProducten(){
+  const q   = (document.getElementById('zoekProduct')?.value||'').toLowerCase();
+  const cat = document.getElementById('filterProductCat')?.value||'';
+  const data = cachedProducten.filter(p=>{
+    if(q   && !(p.naam||'').toLowerCase().includes(q) && !(p.categorie||'').toLowerCase().includes(q)) return false;
+    if(cat && p.categorie!==cat) return false;
+    return true;
+  });
+
+  const tbody = document.getElementById('productenBody');
+  if(!data.length){
+    tbody.innerHTML='<tr><td colspan="5"><div class="empty"><div class="empty-icon">🔧</div><div class="empty-text">Geen producten gevonden</div></div></td></tr>'; return;
+  }
+
+  // Groepeer per categorie in de tabel
+  let html = '';
+  let huidigCat = null;
+  data.forEach(p=>{
+    const cat = p.categorie||'';
+    if(cat !== huidigCat){
+      huidigCat = cat;
+      if(cat) html += `<tr><td colspan="5" style="background:var(--bg3);padding:6px 12px;font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.5px">📁 ${cat}</td></tr>`;
+    }
+    html += `<tr>
+      <td style="color:var(--text);font-weight:500">${p.naam}${p.omschrijving?`<div style="font-size:11px;color:var(--text3)">${p.omschrijving}</div>`:''}</td>
+      <td>${cat?`<span class="badge badge-concept" style="font-size:10px">${cat}</span>`:'<span style="color:var(--text3)">—</span>'}</td>
+      <td>${eur(p.prijs)}</td>
+      <td><span class="badge badge-${p.btw_type==='marge'?'marge':'dienst'}">${p.btw_type} ${p.btw_perc}%</span></td>
+      <td><div class="row-actions">
+        <button class="btn btn-ghost btn-sm" onclick="bewerkProduct('${p.id}')">✏️</button>
+        <button class="btn btn-danger btn-sm" onclick="verwijderProduct('${p.id}')">✕</button>
+      </div></td>
+    </tr>`;
+  });
+  tbody.innerHTML = html;
+}
+
+async function bewerkProduct(id){
+  const p = cachedProducten.find(x=>x.id===id);
+  if(!p) return;
+  document.getElementById('productModalTitel').textContent = 'Product bewerken';
+  document.getElementById('mPNaam').value    = p.naam||'';
+  document.getElementById('mPCat').value     = p.categorie||'';
+  document.getElementById('mPCatSelect').value = p.categorie||'';
+  document.getElementById('mPPrijs').value   = p.prijs||'';
+  document.getElementById('mPBtwType').value = p.btw_type||'excl';
+  document.getElementById('mPBtwPerc').value = p.btw_perc||21;
+  document.getElementById('mPOmschr').value  = p.omschrijving||'';
+  window._bewerkProductId = id;
+  sluitModal && document.getElementById('modalProduct').classList.add('open');
 }
 
 async function slaProductOp(){
-  const naam=document.getElementById('mPNaam').value.trim();
+  const naam = document.getElementById('mPNaam').value.trim();
   if(!naam) return toast('Vul een naam in','err');
+  const cat = document.getElementById('mPCat').value.trim() || document.getElementById('mPCatSelect').value || null;
   try {
-    await dbInsert('producten', {bedrijf_id:huidigeBedrijfId, naam,
-      prijs:+document.getElementById('mPPrijs').value||0,
-      btw_type:document.getElementById('mPBtwType').value,
-      btw_perc:+document.getElementById('mPBtwPerc').value
-    });
-    ['mPNaam','mPPrijs'].forEach(id=>document.getElementById(id).value='');
-    sluitModal('modalProduct'); toast('✅ Product toegevoegd'); renderProducten();
+    const body = {
+      bedrijf_id: huidigeBedrijfId, naam,
+      categorie:  cat||null,
+      prijs:      +document.getElementById('mPPrijs').value||0,
+      btw_type:   document.getElementById('mPBtwType').value,
+      btw_perc:   +document.getElementById('mPBtwPerc').value,
+      omschrijving: document.getElementById('mPOmschr').value.trim()||null,
+    };
+    if(window._bewerkProductId){
+      await dbUpdate('producten',`?id=eq.${window._bewerkProductId}`, body);
+      window._bewerkProductId = null;
+      toast('✅ Product bijgewerkt');
+    } else {
+      await dbInsert('producten', body);
+      toast('✅ Product toegevoegd');
+    }
+    ['mPNaam','mPPrijs','mPCat','mPOmschr'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('productModalTitel').textContent = 'Nieuw product / dienst';
+    sluitModal('modalProduct');
+    renderProducten();
   } catch(e){ toast('Fout: '+e.message,'err'); }
 }
 
@@ -4375,6 +4536,91 @@ function bekijkInkoopBijlage(id){
   }
 }
 
+
+// ══════════════════════════════════════════════════════════
+//  BACKUP
+// ══════════════════════════════════════════════════════════
+
+async function laadBackupStats(){
+  if(!huidigeBedrijfId) return;
+  const [facturen, klanten, inkopen, mutaties, uren, producten] = await Promise.all([
+    dbGet('facturen',         `?select=id&bedrijf_id=eq.${huidigeBedrijfId}`),
+    dbGet('klanten',          `?select=id&bedrijf_id=eq.${huidigeBedrijfId}`),
+    dbGet('inkopen',          `?select=id&bedrijf_id=eq.${huidigeBedrijfId}`),
+    dbGet('kas_mutaties',     `?select=id&bedrijf_id=eq.${huidigeBedrijfId}`),
+    dbGet('uren_registratie', `?select=id&bedrijf_id=eq.${huidigeBedrijfId}`),
+    dbGet('producten',        `?select=id&bedrijf_id=eq.${huidigeBedrijfId}`),
+  ]);
+  document.getElementById('bkStatF').textContent  = (facturen||[]).length;
+  document.getElementById('bkStatK').textContent  = (klanten||[]).length;
+  document.getElementById('bkStatI').textContent  = (inkopen||[]).length;
+  document.getElementById('bkStatKB').textContent = (mutaties||[]).length;
+  document.getElementById('bkStatU').textContent  = (uren||[]).length;
+  document.getElementById('bkStatP').textContent  = (producten||[]).length;
+}
+
+async function maakBackup(){
+  if(!huidigeBedrijfId) return;
+  toast('Backup aanmaken...');
+  try {
+    const [facturen, factuurRegels, klanten, producten, inkopen, mutaties, uren, projecten, offertes, offerteRegels, terugkerend, bedrijf] = await Promise.all([
+      dbGet('facturen',             `?select=*&bedrijf_id=eq.${huidigeBedrijfId}`),
+      dbGet('factuur_regels',       `?select=*&bedrijf_id=eq.${huidigeBedrijfId}`),
+      dbGet('klanten',              `?select=*&bedrijf_id=eq.${huidigeBedrijfId}`),
+      dbGet('producten',            `?select=*&bedrijf_id=eq.${huidigeBedrijfId}`),
+      dbGet('inkopen',              `?select=*&bedrijf_id=eq.${huidigeBedrijfId}`),
+      dbGet('kas_mutaties',         `?select=*&bedrijf_id=eq.${huidigeBedrijfId}`),
+      dbGet('uren_registratie',     `?select=*&bedrijf_id=eq.${huidigeBedrijfId}`),
+      dbGet('projecten',            `?select=*&bedrijf_id=eq.${huidigeBedrijfId}`),
+      dbGet('offertes',             `?select=*&bedrijf_id=eq.${huidigeBedrijfId}`),
+      dbGet('offerte_regels',       `?select=*&bedrijf_id=eq.${huidigeBedrijfId}`),
+      dbGet('terugkerende_facturen',`?select=*&bedrijf_id=eq.${huidigeBedrijfId}`),
+      dbGet('bedrijven',            `?select=naam,email,adres,plaats,btw_nr,kvk_nr,iban,telefoon,website&id=eq.${huidigeBedrijfId}`),
+    ]);
+
+    const backup = {
+      versie:     '1.0',
+      aangemaakt: new Date().toISOString(),
+      bedrijf:    Array.isArray(bedrijf) ? bedrijf[0] : bedrijf,
+      data: {
+        facturen:              facturen||[],
+        factuur_regels:        factuurRegels||[],
+        klanten:               klanten||[],
+        producten:             producten||[],
+        inkopen:               inkopen||[],
+        kas_mutaties:          mutaties||[],
+        uren_registratie:      uren||[],
+        projecten:             projecten||[],
+        offertes:              offertes||[],
+        offerte_regels:        offerteRegels||[],
+        terugkerende_facturen: terugkerend||[],
+      },
+      statistieken: {
+        facturen:     (facturen||[]).length,
+        klanten:      (klanten||[]).length,
+        inkopen:      (inkopen||[]).length,
+        kas_mutaties: (mutaties||[]).length,
+        uren:         (uren||[]).length,
+        producten:    (producten||[]).length,
+      }
+    };
+
+    const json  = JSON.stringify(backup, null, 2);
+    const blob  = new Blob([json], {type:'application/json'});
+    const url   = URL.createObjectURL(blob);
+    const a     = document.createElement('a');
+    const naam  = (backup.bedrijf?.naam||'bedrijf').replace(/[^a-z0-9]/gi,'_').toLowerCase();
+    const datum = new Date().toISOString().split('T')[0];
+    a.href      = url;
+    a.download  = `backup_${naam}_${datum}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    const totaal = Object.values(backup.statistieken).reduce((a,v)=>a+v,0);
+    toast(`✅ Backup gedownload — ${totaal} records`);
+  } catch(e){ toast('Backup mislukt: '+e.message,'err'); }
+}
+
 // ══════════════════════════════════════════════════════════
 //  EXPORT MODULE
 // ══════════════════════════════════════════════════════════
@@ -4534,10 +4780,12 @@ async function exportKlantenExcel(){
 async function exportAllesExcel(){
   const p = getExportPeriode(); if(!p) return;
   toast('Excel aanmaken...');
-  const [facturen, inkopen, klanten] = await Promise.all([
+  const [facturen, inkopen, klanten, mutaties, uren] = await Promise.all([
     getExportFacturen(p.van, p.tot),
     getExportInkopen(p.van, p.tot),
     dbGet('klanten', `?select=*&bedrijf_id=eq.${huidigeBedrijfId}&order=naam.asc`),
+    dbGet('kas_mutaties', `?select=*&bedrijf_id=eq.${huidigeBedrijfId}&datum=gte.${p.van}&datum=lte.${p.tot}&order=datum.asc`)||[],
+    dbGet('uren_registratie', `?select=*&bedrijf_id=eq.${huidigeBedrijfId}&datum=gte.${p.van}&datum=lte.${p.tot}&order=datum.asc`)||[],
   ]);
 
   const wb = XLSX.utils.book_new();
@@ -4558,26 +4806,119 @@ async function exportAllesExcel(){
   const btwInkoop    = inkopen.reduce((a,i)=>a+(+i.btw_bedrag||0),0);
   const netto        = round2(btwOntvangen - btwCredit - btwInkoop);
   const wsBtw = XLSX.utils.json_to_sheet([
-    {'Omschrijving':'Periode',                       'Bedrag': `${fmtDatum(p.van)} t/m ${fmtDatum(p.tot)}`},
-    {'Omschrijving':'BTW ontvangen',                 'Bedrag': round2(btwOntvangen)},
-    {'Omschrijving':'BTW gecrediteerd',              'Bedrag': -round2(btwCredit)},
-    {'Omschrijving':'BTW inkopen (aftrekbaar)',       'Bedrag': -round2(btwInkoop)},
-    {'Omschrijving':'',                              'Bedrag': ''},
+    {'Omschrijving':'Periode',                        'Bedrag': `${fmtDatum(p.van)} t/m ${fmtDatum(p.tot)}`},
+    {'Omschrijving':'BTW ontvangen',                  'Bedrag': round2(btwOntvangen)},
+    {'Omschrijving':'BTW gecrediteerd',               'Bedrag': -round2(btwCredit)},
+    {'Omschrijving':'BTW inkopen (aftrekbaar)',        'Bedrag': -round2(btwInkoop)},
+    {'Omschrijving':'',                               'Bedrag': ''},
     {'Omschrijving': netto>=0?'Af te dragen':'Terug te vorderen', 'Bedrag': netto},
   ]);
   wsBtw['!cols'] = [{wch:35},{wch:18}];
   XLSX.utils.book_append_sheet(wb, wsBtw, 'BTW Aangifte');
 
   // Tabblad 4: Klanten
-  const klantRows = (klanten||[]).map(k=>({
-    'Naam': k.naam, 'Adres': k.adres||'', 'Plaats': k.plaats||'', 'Email': k.email||'',
-  }));
+  const klantRows = (klanten||[]).map(k=>({'Naam':k.naam,'Adres':k.adres||'','Plaats':k.plaats||'','Email':k.email||''}));
   const wsK = XLSX.utils.json_to_sheet(klantRows);
   wsK['!cols'] = [{wch:25},{wch:25},{wch:18},{wch:28}];
   XLSX.utils.book_append_sheet(wb, wsK, 'Klanten');
 
+  // Tabblad 5: Kas & Bank
+  const wsKB = XLSX.utils.json_to_sheet(kasBankRijenXlsx(mutaties||[]));
+  wsKB['!cols'] = [{wch:12},{wch:10},{wch:10},{wch:40},{wch:15},{wch:12},{wch:12}];
+  XLSX.utils.book_append_sheet(wb, wsKB, 'Kas & Bank');
+
+  // Tabblad 6: Uren
+  const wsU = XLSX.utils.json_to_sheet(urenRijenXlsx(uren||[]));
+  wsU['!cols'] = [{wch:12},{wch:22},{wch:20},{wch:35},{wch:8},{wch:10},{wch:12},{wch:14}];
+  XLSX.utils.book_append_sheet(wb, wsU, 'Uren');
+
   downloadXlsx(wb, `Boekhouding_${p.van}_${p.tot}.xlsx`);
   toast('✅ Alles geëxporteerd naar Excel');
+}
+
+// ── KAS/BANK EXPORT ──
+function kasBankRijenXlsx(mutaties){
+  let saldoKas=0, saldoBank=0;
+  return mutaties.map(m=>{
+    const delta = m.type==='bij' ? +m.bedrag : -(+m.bedrag);
+    if(m.rekening==='kas') saldoKas=round2(saldoKas+delta);
+    else saldoBank=round2(saldoBank+delta);
+    return {
+      'Datum':        fmtDatum(m.datum),
+      'Rekening':     m.rekening,
+      'Type':         m.type,
+      'Omschrijving': m.omschrijving,
+      'Categorie':    m.categorie||'',
+      'Bedrag':       +m.bedrag||0,
+      'Saldo':        m.rekening==='kas' ? saldoKas : saldoBank,
+    };
+  });
+}
+
+async function exportKasBankExcel(){
+  const p = getExportPeriode(); if(!p) return;
+  toast('Excel aanmaken...');
+  const data = await dbGet('kas_mutaties',`?select=*&bedrijf_id=eq.${huidigeBedrijfId}&datum=gte.${p.van}&datum=lte.${p.tot}&order=datum.asc`)||[];
+  if(!data.length){ toast('Geen mutaties in deze periode','err'); return; }
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(kasBankRijenXlsx(data));
+  ws['!cols'] = [{wch:12},{wch:10},{wch:10},{wch:40},{wch:15},{wch:12},{wch:12}];
+  XLSX.utils.book_append_sheet(wb, ws, 'Kas & Bank');
+  downloadXlsx(wb, `KasBank_${p.van}_${p.tot}.xlsx`);
+  toast('✅ Excel gedownload');
+}
+
+async function exportKasBankPDF(){
+  const p = getExportPeriode(); if(!p) return;
+  const data = await dbGet('kas_mutaties',`?select=*&bedrijf_id=eq.${huidigeBedrijfId}&datum=gte.${p.van}&datum=lte.${p.tot}&order=datum.asc`)||[];
+  if(!data.length){ toast('Geen mutaties in deze periode','err'); return; }
+  const S = window._bedrijfInst||{};
+  const headers = ['Datum','Rekening','Type','Omschrijving','Categorie','Bedrag'];
+  const rijen = data.map(m=>[fmtDatum(m.datum), m.rekening, m.type, (m.omschrijving||'').substring(0,30), m.categorie||'', fmtEur(m.bedrag)]);
+  exportPDFBase('Kas & Bank overzicht', headers, rijen, `KasBank_${p.van}_${p.tot}.pdf`, S,
+    `Periode: ${fmtDatum(p.van)} t/m ${fmtDatum(p.tot)}  ·  ${data.length} mutaties`);
+  toast('✅ PDF gedownload');
+}
+
+// ── UREN EXPORT ──
+function urenRijenXlsx(uren){
+  return uren.map(u=>({
+    'Datum':        fmtDatum(u.datum),
+    'Klant':        u.klant_naam||'',
+    'Project':      u.project_naam||'',
+    'Omschrijving': u.omschrijving||'',
+    'Uren':         +u.uren||0,
+    'Tarief':       +u.tarief||0,
+    'Excl. BTW':    +u.excl_tot||0,
+    'Status':       u.status||'open',
+  }));
+}
+
+async function exportUrenExcel(){
+  const p = getExportPeriode(); if(!p) return;
+  toast('Excel aanmaken...');
+  const data = await dbGet('uren_registratie',`?select=*&bedrijf_id=eq.${huidigeBedrijfId}&datum=gte.${p.van}&datum=lte.${p.tot}&order=datum.asc`)||[];
+  if(!data.length){ toast('Geen uren in deze periode','err'); return; }
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(urenRijenXlsx(data));
+  ws['!cols'] = [{wch:12},{wch:22},{wch:20},{wch:35},{wch:8},{wch:10},{wch:12},{wch:14}];
+  XLSX.utils.book_append_sheet(wb, ws, 'Uren');
+  downloadXlsx(wb, `Uren_${p.van}_${p.tot}.xlsx`);
+  toast('✅ Excel gedownload');
+}
+
+async function exportUrenPDF(){
+  const p = getExportPeriode(); if(!p) return;
+  const data = await dbGet('uren_registratie',`?select=*&bedrijf_id=eq.${huidigeBedrijfId}&datum=gte.${p.van}&datum=lte.${p.tot}&order=datum.asc`)||[];
+  if(!data.length){ toast('Geen uren in deze periode','err'); return; }
+  const S = window._bedrijfInst||{};
+  const totUren   = data.reduce((a,u)=>a+(+u.uren||0),0);
+  const totBedrag = data.reduce((a,u)=>a+(+u.excl_tot||0),0);
+  const headers   = ['Datum','Klant','Omschrijving','Uren','Tarief','Bedrag','Status'];
+  const rijen     = data.map(u=>[fmtDatum(u.datum), (u.klant_naam||'').substring(0,18), (u.omschrijving||'').substring(0,25), (+(u.uren||0)).toFixed(2)+'u', '€'+fmtEur(u.tarief), '€'+fmtEur(u.excl_tot), u.status||'open']);
+  exportPDFBase('Urenregistratie', headers, rijen, `Uren_${p.van}_${p.tot}.pdf`, S,
+    `Periode: ${fmtDatum(p.van)} t/m ${fmtDatum(p.tot)}  ·  Totaal: ${totUren.toFixed(2)}u  ·  €${fmtEur(totBedrag)} excl.`);
+  toast('✅ PDF gedownload');
 }
 
 // ── PDF EXPORTS ──
@@ -5348,6 +5689,107 @@ async function renderResultaten(){
       <line x1="${marge}" y1="${hoogte-30}" x2="${breedte-marge}" y2="${hoogte-30}" stroke="var(--border)" stroke-width="1"/>
       ${balken}
     </svg>`;
+}
+
+// ── RESULTATENREKENING EXPORT ──
+async function exportResultatenExcel(){
+  const van = document.getElementById('resVan').value;
+  const tot = document.getElementById('resTot').value;
+  if(!van||!tot){ toast('Kies eerst een periode','err'); return; }
+  toast('Excel aanmaken...');
+  const [facturen, inkopen, mutaties] = await Promise.all([
+    dbGet('facturen',    `?select=*&bedrijf_id=eq.${huidigeBedrijfId}&datum=gte.${van}&datum=lte.${tot}`)||[],
+    dbGet('inkopen',     `?select=*&bedrijf_id=eq.${huidigeBedrijfId}&datum=gte.${van}&datum=lte.${tot}`)||[],
+    dbGet('kas_mutaties',`?select=*&bedrijf_id=eq.${huidigeBedrijfId}&datum=gte.${van}&datum=lte.${tot}`)||[],
+  ]);
+  const {baten, lasten, netto, btwNetto, btwOntvangen, btwCredit, btwInkoop, perCat} = berekenResultaten(facturen, inkopen, mutaties);
+  const rows = [
+    {'Post':'BATEN','Bedrag':''},
+    {'Post':'Omzet excl. BTW','Bedrag':baten.omzetExcl},
+    {'Post':'Creditnota\'s','Bedrag':-baten.creditExcl},
+    {'Post':'Kas inkomsten','Bedrag':baten.kasIn},
+    {'Post':'Totaal baten','Bedrag':baten.totaal},
+    {'Post':'','Bedrag':''},
+    {'Post':'LASTEN','Bedrag':''},
+    {'Post':'Inkoopkosten excl. BTW','Bedrag':lasten.inkoopKosten},
+    ...Object.entries(perCat).map(([cat,v])=>({'Post':cat,'Bedrag':v})),
+    {'Post':'Totaal lasten','Bedrag':lasten.totaal},
+    {'Post':'','Bedrag':''},
+    {'Post':netto>=0?'WINST':'VERLIES','Bedrag':netto},
+    {'Post':'','Bedrag':''},
+    {'Post':'BTW SAMENVATTING','Bedrag':''},
+    {'Post':'BTW ontvangen','Bedrag':btwOntvangen},
+    {'Post':'BTW creditnota\'s','Bedrag':-btwCredit},
+    {'Post':'BTW inkopen (aftrekbaar)','Bedrag':-btwInkoop},
+    {'Post':btwNetto>=0?'Af te dragen':'Terug te vorderen','Bedrag':btwNetto},
+  ];
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws['!cols'] = [{wch:35},{wch:16}];
+  XLSX.utils.book_append_sheet(wb, ws, 'Resultatenrekening');
+  downloadXlsx(wb, `Resultatenrekening_${van}_${tot}.xlsx`);
+  toast('✅ Excel gedownload');
+}
+
+async function exportResultatenPDF(){
+  const van = document.getElementById('resVan').value;
+  const tot = document.getElementById('resTot').value;
+  if(!van||!tot){ toast('Kies eerst een periode','err'); return; }
+  const [facturen, inkopen, mutaties] = await Promise.all([
+    dbGet('facturen',    `?select=*&bedrijf_id=eq.${huidigeBedrijfId}&datum=gte.${van}&datum=lte.${tot}`)||[],
+    dbGet('inkopen',     `?select=*&bedrijf_id=eq.${huidigeBedrijfId}&datum=gte.${van}&datum=lte.${tot}`)||[],
+    dbGet('kas_mutaties',`?select=*&bedrijf_id=eq.${huidigeBedrijfId}&datum=gte.${van}&datum=lte.${tot}`)||[],
+  ]);
+  const {baten, lasten, netto, btwNetto, btwOntvangen, btwCredit, btwInkoop, perCat} = berekenResultaten(facturen, inkopen, mutaties);
+  const S   = window._bedrijfInst||{};
+  const eur = v=>'€'+Math.abs(+v||0).toFixed(2).replace('.',',');
+  const headers = ['Post','Bedrag'];
+  const rijen = [
+    ['── BATEN ──',''],
+    ['Omzet excl. BTW',           '+'+eur(baten.omzetExcl)],
+    ['Creditnota\'s',             baten.creditExcl?'-'+eur(baten.creditExcl):'—'],
+    ['Kas inkomsten',             '+'+eur(baten.kasIn)],
+    ['Totaal baten',              eur(baten.totaal)],
+    ['',''],
+    ['── LASTEN ──',''],
+    ['Inkoopkosten excl. BTW',    '-'+eur(lasten.inkoopKosten)],
+    ...Object.entries(perCat).map(([cat,v])=>[cat,'-'+eur(v)]),
+    ['Totaal lasten',             eur(lasten.totaal)],
+    ['',''],
+    [netto>=0?'WINST':'VERLIES',  (netto<0?'-':'')+eur(netto)],
+    ['',''],
+    ['── BTW ──',''],
+    ['BTW ontvangen',             eur(btwOntvangen)],
+    ['BTW creditnota\'s',         btwCredit?'-'+eur(btwCredit):'—'],
+    ['BTW inkopen (aftrekbaar)',   '-'+eur(btwInkoop)],
+    [btwNetto>=0?'Af te dragen':'Terug te vorderen', (btwNetto<0?'-':'')+eur(btwNetto)],
+  ];
+  exportPDFBase('Resultatenrekening', headers, rijen,
+    `Resultatenrekening_${van}_${tot}.pdf`, S,
+    `Periode: ${fmtDatum(van)} t/m ${fmtDatum(tot)}`);
+  toast('✅ PDF gedownload');
+}
+
+function berekenResultaten(facturen, inkopen, mutaties){
+  const omzetExcl    = round2((facturen||[]).filter(f=>f.factuur_type!=='credit').reduce((a,f)=>a+(+f.tot_excl||0),0));
+  const creditExcl   = round2((facturen||[]).filter(f=>f.factuur_type==='credit').reduce((a,f)=>a+Math.abs(+f.tot_excl||0),0));
+  const kasIn        = round2((mutaties||[]).filter(m=>m.type==='bij').reduce((a,m)=>a+(+m.bedrag||0),0));
+  const inkoopKosten = round2((inkopen||[]).reduce((a,i)=>a+(+i.excl_btw||0),0));
+  const kasUit       = round2((mutaties||[]).filter(m=>m.type==='af').reduce((a,m)=>a+(+m.bedrag||0),0));
+  const totaalBaten  = round2(omzetExcl - creditExcl + kasIn);
+  const totaalLasten = round2(inkoopKosten + kasUit);
+  const netto        = round2(totaalBaten - totaalLasten);
+  const btwOntvangen = round2((facturen||[]).filter(f=>f.factuur_type!=='credit').reduce((a,f)=>a+(+f.tot_btw||0),0));
+  const btwCredit    = round2((facturen||[]).filter(f=>f.factuur_type==='credit').reduce((a,f)=>a+Math.abs(+f.tot_btw||0),0));
+  const btwInkoop    = round2((inkopen||[]).reduce((a,i)=>a+(+i.btw_bedrag||0),0));
+  const btwNetto     = round2(btwOntvangen - btwCredit - btwInkoop);
+  const perCat = {};
+  (mutaties||[]).filter(m=>m.type==='af').forEach(m=>{ const c=m.categorie||'Overig'; perCat[c]=round2((perCat[c]||0)+(+m.bedrag||0)); });
+  return {
+    baten:{omzetExcl, creditExcl, kasIn, totaal:totaalBaten},
+    lasten:{inkoopKosten, kasUit, totaal:totaalLasten},
+    netto, btwNetto, btwOntvangen, btwCredit, btwInkoop, perCat,
+  };
 }
 
 // ── DASHBOARD RESULTATEN WIDGET ──
