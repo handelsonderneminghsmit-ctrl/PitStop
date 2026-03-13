@@ -714,13 +714,20 @@ tr:last-child td{border-bottom:none;}
         <div class="page-title">Alle <span>Facturen</span></div>
         <button class="btn btn-primary" onclick="showTab('factuur')">➕ Nieuwe factuur</button>
       </div>
-      <div class="card" style="padding:12px 16px">
-        <input id="zoekFactuur" placeholder="🔍 Zoek op naam, nummer, kenteken..." oninput="filterFacturen()" style="width:100%;box-sizing:border-box">
+      <div class="card" style="padding:12px 16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <input id="zoekFactuur" placeholder="🔍 Zoek op naam, nummer, kenteken..." oninput="filterFacturen()" style="flex:1;min-width:180px">
+        <select id="filterBetaalStatus" onchange="filterFacturen()" style="width:160px">
+          <option value="">Alle statussen</option>
+          <option value="onbetaald">Onbetaald</option>
+          <option value="betaald">Betaald</option>
+          <option value="deels">Deels betaald</option>
+        </select>
       </div>
+      <div id="factuurBetaalStats" class="stats-grid" style="margin-bottom:4px"></div>
       <div class="card" style="padding:0">
         <div class="table-wrap">
-          <table id="factuurTabel"><thead><tr><th>Nr</th><th>Klant</th><th>Type</th><th>Omschrijving</th><th>Bedrag</th><th>Acties</th></tr></thead>
-          <tbody id="factuurBody"><tr><td colspan="6"><div class="loading"><div class="spinner"></div></div></td></tr></tbody></table>
+          <table id="factuurTabel"><thead><tr><th>Nr</th><th>Klant</th><th>Type</th><th>Omschrijving</th><th>Bedrag</th><th>Status</th><th>Acties</th></tr></thead>
+          <tbody id="factuurBody"><tr><td colspan="7"><div class="loading"><div class="spinner"></div></div></td></tr></tbody></table>
         </div>
       </div>
     </section>
@@ -2159,29 +2166,75 @@ async function maakFactuur(){
 let cachedFacturen = [];
 
 function filterFacturen(){
-  const q = (document.getElementById('zoekFactuur')?.value||'').toLowerCase();
-  const gefilterd = q ? cachedFacturen.filter(f=>
-    (f.nr||'').toLowerCase().includes(q) ||
-    (f.klant_naam||'').toLowerCase().includes(q) ||
-    (f.kenteken||'').toLowerCase().includes(q)
-  ) : cachedFacturen;
+  const q  = (document.getElementById('zoekFactuur')?.value||'').toLowerCase();
+  const st = document.getElementById('filterBetaalStatus')?.value||'';
+  const gefilterd = cachedFacturen.filter(f=>{
+    const matchQ  = !q  || (f.nr||'').toLowerCase().includes(q) || (f.klant_naam||'').toLowerCase().includes(q) || (f.kenteken||'').toLowerCase().includes(q);
+    const matchSt = !st || (f.betaal_status||'onbetaald')===st;
+    return matchQ && matchSt;
+  });
   renderFactuurRijen(gefilterd);
 }
+
+function renderBetaalStats(data){
+  const el = document.getElementById('factuurBetaalStats');
+  if(!el) return;
+  const onbetaald = data.filter(f=>(f.betaal_status||'onbetaald')==='onbetaald' && f.factuur_type!=='credit');
+  const betaald   = data.filter(f=>f.betaal_status==='betaald');
+  const deels     = data.filter(f=>f.betaal_status==='deels');
+  const totOpen   = onbetaald.reduce((a,f)=>a+(+f.tot_incl||0),0);
+  const totBetaald= betaald.reduce((a,f)=>a+(+f.tot_incl||0),0);
+  const totDeels  = deels.reduce((a,f)=>a+(+f.tot_incl||0),0);
+  el.innerHTML = `
+    <div class="stat-card red"  style="cursor:pointer" onclick="document.getElementById('filterBetaalStatus').value='onbetaald';filterFacturen()">
+      <div class="stat-label">Onbetaald (${onbetaald.length})</div>
+      <div class="stat-value" style="font-size:18px"><small>€</small>${totOpen.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,'.')}</div>
+    </div>
+    <div class="stat-card" style="cursor:pointer;background:rgba(249,115,22,.08);border-color:var(--accent)" onclick="document.getElementById('filterBetaalStatus').value='deels';filterFacturen()">
+      <div class="stat-label">Deels betaald (${deels.length})</div>
+      <div class="stat-value" style="font-size:18px;color:var(--accent)"><small>€</small>${totDeels.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,'.')}</div>
+    </div>
+    <div class="stat-card green" style="cursor:pointer" onclick="document.getElementById('filterBetaalStatus').value='betaald';filterFacturen()">
+      <div class="stat-label">Betaald (${betaald.length})</div>
+      <div class="stat-value" style="font-size:18px"><small>€</small>${totBetaald.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,'.')}</div>
+    </div>`;
+}
+
+const BETAAL_BADGE = {
+  onbetaald: 'badge-credit',
+  betaald:   'badge-geaccepteerd',
+  deels:     'badge-verzonden',
+};
+const BETAAL_LABEL = {
+  onbetaald: 'Onbetaald',
+  betaald:   'Betaald',
+  deels:     'Deels betaald',
+};
 
 function renderFactuurRijen(data){
   const tbody=document.getElementById('factuurBody');
   if(!data||data.length===0){
-    tbody.innerHTML='<tr><td colspan="6"><div class="empty"><div class="empty-icon">📄</div><div class="empty-text">Geen facturen gevonden</div></div></td></tr>'; return;
+    tbody.innerHTML='<tr><td colspan="7"><div class="empty"><div class="empty-icon">📄</div><div class="empty-text">Geen facturen gevonden</div></div></td></tr>'; return;
   }
   const boekhouder = window._bedrijfInst?.boekhouder_email||'';
   const typeLabels = {auto:'Voertuig', dienst:'Diensten', inkoop:'Inkoop', credit:'Credit'};
-  tbody.innerHTML=data.map(f=>`<tr>
+  tbody.innerHTML=data.map(f=>{
+    const bs = f.betaal_status||(f.factuur_type==='credit'?'betaald':'onbetaald');
+    return `<tr>
     <td><span style="font-family:Rajdhani,sans-serif;font-weight:700;color:var(--accent)">${f.nr}</span></td>
     <td style="color:var(--text)">${f.klant_naam}</td>
     <td><span class="badge badge-${f.factuur_type}">${typeLabels[f.factuur_type]||f.factuur_type}</span></td>
     <td>${f.factuur_type==='auto'?`<span class="kenteken-display">${f.kenteken||''}</span>`:(f.klant_naam)}</td>
     <td><div style="font-family:Rajdhani,sans-serif;font-size:15px;font-weight:700;color:var(--text)">${eur(f.tot_incl)}</div>
         <div style="font-size:11px;color:var(--text3)">BTW: ${eur(f.tot_btw)}</div></td>
+    <td>
+      <span class="badge ${BETAAL_BADGE[bs]||'badge-concept'}">${BETAAL_LABEL[bs]||bs}</span>
+      <div style="margin-top:5px;display:flex;gap:4px;flex-wrap:wrap">
+        ${bs!=='betaald'  ?`<button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 7px" onclick="setBetaalStatus('${f.id}','betaald')">✅ Betaald</button>`:''}
+        ${bs!=='deels'    ?`<button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 7px" onclick="setBetaalStatus('${f.id}','deels')">💶 Deels</button>`:''}
+        ${bs!=='onbetaald'?`<button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 7px" onclick="setBetaalStatus('${f.id}','onbetaald')">↩ Reset</button>`:''}
+      </div>
+    </td>
     <td><div class="row-actions">
       <button class="btn btn-ghost btn-sm" onclick="bewerkFactuur('${f.id}')">✏️</button>
       <button class="btn btn-ghost btn-sm" onclick="downloadPDF('${f.id}')">📄 PDF</button>
@@ -2189,12 +2242,23 @@ function renderFactuurRijen(data){
       ${boekhouder?`<button class="btn btn-ghost btn-sm" onclick="mailFactuurBoekhouder('${f.id}')" title="Mail naar boekhouder">📊 Boekhouding</button>`:''}
       <button class="btn btn-danger btn-sm" onclick="verwijderFactuur('${f.id}')">✕</button>
     </div></td>
-  </tr>`).join('');
+  </tr>`;
+  }).join('');
+}
+
+async function setBetaalStatus(id, status){
+  await dbUpdate('facturen',`?id=eq.${id}`,{betaal_status: status});
+  const f = cachedFacturen.find(x=>x.id===id);
+  if(f) f.betaal_status = status;
+  renderBetaalStats(cachedFacturen);
+  filterFacturen();
+  toast(status==='betaald'?'✅ Gemarkeerd als betaald': status==='deels'?'💶 Deels betaald':'↩ Teruggezet naar onbetaald');
 }
 
 async function renderFacturen(){
   if(!huidigeBedrijfId) return;
   cachedFacturen = await dbGet('facturen', `?select=*&bedrijf_id=eq.${huidigeBedrijfId}&order=aangemaakt_op.desc`);
+  renderBetaalStats(cachedFacturen);
   filterFacturen();
 }
 
