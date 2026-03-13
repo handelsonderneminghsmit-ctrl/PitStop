@@ -3,9 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>PitStop Facturatie</title>
+<title>Slimmer Factureren</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/dist/umd/supabase.min.js"></script>
+<script src="https://js.stripe.com/v3/"></script>
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -89,6 +90,27 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   border-radius:8px; cursor:pointer; transition:all 0.2s;
 }
 .btn-logout:hover { background:rgba(239,68,68,0.18); }
+
+/* ── Upgrade / Plan pagina ── */
+.period-btn { background:none; border:none; color:var(--text3); padding:7px 14px; border-radius:7px; font-size:13px; font-weight:500; cursor:pointer; transition:.15s; }
+.period-btn.active { background:var(--accent); color:#fff; font-weight:600; }
+.upgrade-card { background:var(--bg2); border:1.5px solid var(--border); border-radius:16px; padding:24px; position:relative; display:flex; flex-direction:column; gap:6px; }
+.upgrade-card-featured { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent),0 8px 32px rgba(249,115,22,.15); }
+.plan-badge { font-size:10px; font-weight:700; padding:3px 10px; border-radius:20px; display:inline-block; margin-bottom:8px; }
+.demo-badge { background:var(--bg3); color:var(--text3); }
+.featured-badge { background:var(--accent); color:#fff; }
+.plan-icon { font-size:32px; margin-bottom:4px; }
+.plan-naam { font-size:20px; font-weight:700; color:var(--text1); }
+.plan-prijs { font-size:34px; font-weight:800; color:var(--accent); line-height:1.1; margin-top:4px; }
+.plan-periode { font-size:12px; color:var(--text3); margin-bottom:12px; }
+.plan-features { list-style:none; padding:0; margin:0 0 20px; display:flex; flex-direction:column; gap:7px; }
+.plan-features li { font-size:13px; color:var(--text2); }
+.plan-btn { width:100%; padding:12px; border-radius:10px; font-size:14px; font-weight:700; cursor:pointer; border:none; margin-top:auto; transition:.15s; }
+.plan-btn-demo { background:var(--bg3); color:var(--text3); cursor:default; }
+.plan-btn-pro { background:var(--accent); color:#fff; }
+.plan-btn-pro:hover { opacity:.88; }
+.demo-top-bar { background:linear-gradient(90deg,#F97316,#ea580c); color:#fff; text-align:center; padding:7px 16px; font-size:13px; font-weight:600; }
+.demo-top-bar a { color:#fff; text-decoration:underline; cursor:pointer; margin-left:8px; }
 
 /* BOTTOM NAV (mobile) */
 .bottom-nav {
@@ -187,6 +209,11 @@ tr:last-child td{border-bottom:none;}
 .badge-dienst{background:rgba(16,185,129,0.15);color:#34d399;}
 .badge-inkoop{background:rgba(168,85,247,0.15);color:#c084fc;}
 .badge-credit{background:rgba(239,68,68,0.15);color:#f87171;}
+.badge-concept{background:rgba(100,116,139,0.2);color:#94a3b8;}
+.badge-verzonden{background:rgba(59,130,246,0.15);color:#60a5fa;}
+.badge-geaccepteerd{background:rgba(16,185,129,0.15);color:#34d399;}
+.badge-verlopen{background:rgba(239,68,68,0.15);color:#f87171;}
+.badge-omgezet{background:rgba(168,85,247,0.15);color:#c084fc;}
 .badge-marge{background:rgba(249,115,22,0.15);color:var(--accent);}
 .row-actions{display:flex;gap:6px;flex-wrap:wrap;}
 
@@ -285,13 +312,24 @@ tr:last-child td{border-bottom:none;}
   // Te vinden op: https://supabase.com → jouw project → Settings → API
   const SUPABASE_URL  = 'https://kgtnedygwjgcnoqzdjbr.supabase.co';
   const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtndG5lZHlnd2pnY25vcXpkamJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMwOTYwMDMsImV4cCI6MjA4ODY3MjAwM30.yZCOngIu3E-mJ866ykiRC8r4YRX-RnowrbkgAPWoPfg';
+
+  // !! VERVANG MET JOUW STRIPE PUBLISHABLE KEY !!
+  // Te vinden op: https://dashboard.stripe.com → Developers → API keys
+  const STRIPE_PK = 'pk_live_JOUW_STRIPE_KEY_HIER';
+
+  // Stripe Price IDs — aanmaken in Stripe Dashboard → Products
+  const STRIPE_PRICES = {
+    maand:   'price_MAAND_ID_HIER',
+    kwartaal:'price_KWARTAAL_ID_HIER',
+    jaar:    'price_JAAR_ID_HIER',
+  };
 </script>
 
 <!-- ══ AUTH SCHERM ══ -->
 <div id="authScreen">
   <div class="auth-box">
-    <div class="auth-logo">🏁 PitStop</div>
-    <div class="auth-sub">Facturatie</div>
+    <div class="auth-logo">📄 Slimmer</div>
+    <div class="auth-sub">Factureren</div>
 
     <div class="auth-tabs">
       <button class="auth-tab active" onclick="toonAuthTab('login')">Inloggen</button>
@@ -347,7 +385,7 @@ tr:last-child td{border-bottom:none;}
   <div style="min-height:100vh;background:var(--bg);padding:30px 20px;max-width:800px;margin:0 auto">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;flex-wrap:wrap;gap:12px">
       <div>
-        <div style="font-family:'Rajdhani',sans-serif;font-size:26px;font-weight:700;color:var(--accent)">🏁 PitStop Admin</div>
+        <div style="font-family:'Rajdhani',sans-serif;font-size:26px;font-weight:700;color:var(--accent)">📄 Slimmer Factureren — Admin</div>
         <div style="font-size:12px;color:var(--text3);letter-spacing:1px;margin-top:2px">Gebruikersbeheer</div>
       </div>
       <button class="btn btn-ghost btn-sm" onclick="uitloggen()">🚪 Uitloggen</button>
@@ -387,22 +425,31 @@ tr:last-child td{border-bottom:none;}
 <!-- ══ HOOFD APP ══ -->
 <div id="app">
 
+  <!-- DEMO TOPBAR -->
+  <div id="demoTopBar" class="demo-top-bar" style="display:none">
+    ⭐ Demo account — <span id="demoTopBarTekst">nog 5 facturen beschikbaar</span>
+    <a onclick="showTab('upgrade')">Upgraden →</a>
+  </div>
+
   <!-- SIDEBAR -->
   <div class="sidebar">
     <div class="logo">
-      <div class="logo-title">🏁 PitStop</div>
-      <div class="logo-sub">Facturatie</div>
+      <div class="logo-title">📄 Slimmer</div>
+      <div class="logo-sub">Factureren</div>
       <div class="logo-user"><span class="avatar" id="avatarLetter">?</span><span class="sidebar-email" id="sidebarEmail"></span></div>
     </div>
     <div class="nav-section">
       <div class="nav-label">Menu</div>
       <button class="nav-btn active" onclick="showTab('dashboard')"><span class="icon">📊</span> Dashboard</button>
       <button class="nav-btn" onclick="showTab('factuur')"><span class="icon">➕</span> Nieuwe Factuur</button>
+      <button class="nav-btn" onclick="showTab('offerte')"><span class="icon">📝</span> Nieuwe Offerte</button>
       <button class="nav-btn" onclick="showTab('facturen')"><span class="icon">📄</span> Facturen</button>
+      <button class="nav-btn" onclick="showTab('offertes')"><span class="icon">📋</span> Offertes</button>
       <button class="nav-btn" onclick="showTab('klanten')"><span class="icon">👥</span> Klanten</button>
       <button class="nav-btn" onclick="showTab('producten')"><span class="icon">🔧</span> Producten</button>
       <div class="nav-label" style="margin-top:10px">Systeem</div>
       <button class="nav-btn" onclick="showTab('instellingen')"><span class="icon">⚙️</span> Instellingen</button>
+      <button class="nav-btn" id="upgradeNavBtn" onclick="showTab('upgrade')" style="color:#F97316;font-weight:600"><span class="icon">⭐</span> <span id="upgradeNavLabel">Upgrade</span></button>
     </div>
     <div class="nav-bottom">
       <button class="btn-logout" onclick="uitloggen()">🚪 Uitloggen</button>
@@ -443,8 +490,8 @@ tr:last-child td{border-bottom:none;}
       <div class="card">
         <div class="card-title">Factuurtype</div>
         <div class="type-selector">
-          <button class="type-btn" id="typeBtnAuto" onclick="selectType('auto')"><span class="type-icon">🚗</span>Auto-factuur</button>
-          <button class="type-btn" id="typeBtnDienst" onclick="selectType('dienst')"><span class="type-icon">🔧</span>Dienst / Chiptuning</button>
+          <button class="type-btn" id="typeBtnAuto" onclick="selectType('auto')"><span class="type-icon">🚗</span>Voertuigverkoop</button>
+          <button class="type-btn" id="typeBtnDienst" onclick="selectType('dienst')"><span class="type-icon">🔧</span>Diensten / Producten</button>
           <button class="type-btn" id="typeBtnInkoop" onclick="selectType('inkoop')"><span class="type-icon">📋</span>Inkoopverklaring</button>
           <button class="type-btn" id="typeBtnCredit" onclick="selectType('credit')"><span class="type-icon">↩️</span>Creditfactuur</button>
         </div>
@@ -555,6 +602,80 @@ tr:last-child td{border-bottom:none;}
       </div>
     </section>
 
+    <!-- OFFERTE MAKEN -->
+    <section id="offerte">
+      <div class="page-header">
+        <div class="page-title">Nieuwe <span>Offerte</span></div>
+        <button class="btn btn-primary" onclick="maakOfferte()">⚡ Offerte aanmaken</button>
+      </div>
+      <div class="card">
+        <div class="card-title">Offertegegevens</div>
+        <div class="form-grid">
+          <div class="form-group"><label>Datum</label><input id="offDatum" type="date"></div>
+          <div class="form-group"><label>Geldig tot</label><input id="offGeldigTot" type="date"></div>
+          <div class="form-group"><label>Referentie <span style="color:var(--text3);font-weight:400">(optioneel)</span></label><input id="offReferentie" placeholder="Bijv. projectnaam of kenmerk"></div>
+        </div>
+      </div>
+      <div class="form-grid">
+        <!-- KLANT CARD -->
+        <div class="card">
+          <div class="card-title">Klantgegevens</div>
+          <div class="form-group"><label>Bestaande klant</label><select id="offKlantSelect" onchange="laadOffKlant()"></select></div>
+          <div class="divider"></div>
+          <div class="form-group"><label>Naam</label><input id="offKlantNaam" placeholder="Volledige naam"></div>
+          <div class="postcode-row">
+            <div class="form-group" style="margin:0"><label>Postcode</label><input id="offPostcode" placeholder="1234AB"></div>
+            <div class="form-group" style="margin:0"><label>Huisnummer</label><input id="offHuisnummer" placeholder="12"></div>
+            <button class="btn btn-ghost btn-sm" onclick="zoekAdresOff()" style="height:42px;margin-bottom:0">🔍</button>
+          </div>
+          <div class="form-group" style="margin-top:10px"><label>Adres</label><input id="offKlantAdres" placeholder="Straat 12"></div>
+          <div class="form-group"><label>Plaats</label><input id="offKlantPlaats" placeholder="Amsterdam"></div>
+          <div class="form-group"><label>Email</label><input id="offKlantEmail" placeholder="email@adres.nl" type="email"></div>
+        </div>
+
+        <!-- REGELS CARD -->
+        <div class="card">
+          <div class="card-title">Producten &amp; Diensten</div>
+          <div class="form-group"><label>Snel kiezen</label><select id="offProductSelect" onchange="laadOffProduct()"><option value="">— Selecteer product —</option></select></div>
+          <div class="form-group"><label>Omschrijving</label><input id="offProductNaam" placeholder="Product of dienst"></div>
+          <div class="form-grid-3">
+            <div class="form-group"><label>Aantal</label><input id="offAantal" type="number" value="1" min="0.01" step="0.01"></div>
+            <div class="form-group"><label>Prijs</label><input id="offPrijs" type="number" placeholder="0.00" step="0.01"></div>
+            <div class="form-group"><label>BTW %</label><select id="offBtwPerc"><option value="21">21%</option><option value="9">9%</option><option value="0">0%</option></select></div>
+            <div class="form-group"><label>Prijs is</label><select id="offBtwType"><option value="excl">Excl. BTW</option><option value="incl">Incl. BTW</option><option value="marge">Marge</option></select></div>
+          </div>
+          <button class="btn btn-blue" onclick="addOffLine()">+ Voeg toe</button>
+          <div class="table-wrap" style="margin-top:14px">
+            <table class="lines-table"><thead><tr><th>Omschrijving</th><th>Aantal</th><th>Excl.</th><th>BTW%</th><th>BTW</th><th>Incl.</th><th></th></tr></thead>
+            <tbody id="offLinesTbody"></tbody></table>
+          </div>
+          <div class="totals-block">
+            <div class="totals-row"><span>Subtotaal excl. BTW</span><span id="offSubtotaalExcl" style="min-width:90px;text-align:right">€0,00</span></div>
+            <div class="totals-row"><span>BTW</span><span id="offSubtotaalBTW" style="min-width:90px;text-align:right">€0,00</span></div>
+            <div class="totals-divider"></div>
+            <div class="totals-row final"><span>Totaal incl. BTW</span><span id="offTotaal" style="min-width:90px;text-align:right">€0,00</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- OFFERTES LIJST -->
+    <section id="offertes">
+      <div class="page-header">
+        <div class="page-title">Alle <span>Offertes</span></div>
+        <button class="btn btn-primary" onclick="showTab('offerte')">➕ Nieuwe offerte</button>
+      </div>
+      <div class="card" style="padding:12px 16px">
+        <input id="zoekOfferte" placeholder="🔍 Zoek op naam, nummer..." oninput="filterOffertes()" style="width:100%;box-sizing:border-box">
+      </div>
+      <div class="card" style="padding:0">
+        <div class="table-wrap">
+          <table id="offerteTabel"><thead><tr><th>Nr</th><th>Klant</th><th>Datum</th><th>Geldig tot</th><th>Status</th><th>Bedrag</th><th>Acties</th></tr></thead>
+          <tbody id="offerteBody"><tr><td colspan="7"><div class="loading"><div class="spinner"></div></div></td></tr></tbody></table>
+        </div>
+      </div>
+    </section>
+
     <!-- FACTUREN -->
     <section id="facturen">
       <div class="page-header">
@@ -566,7 +687,7 @@ tr:last-child td{border-bottom:none;}
       </div>
       <div class="card" style="padding:0">
         <div class="table-wrap">
-          <table id="factuurTabel"><thead><tr><th>Nr</th><th>Klant</th><th>Type</th><th>Auto/Dienst</th><th>Bedrag</th><th>Acties</th></tr></thead>
+          <table id="factuurTabel"><thead><tr><th>Nr</th><th>Klant</th><th>Type</th><th>Omschrijving</th><th>Bedrag</th><th>Acties</th></tr></thead>
           <tbody id="factuurBody"><tr><td colspan="6"><div class="loading"><div class="spinner"></div></div></td></tr></tbody></table>
         </div>
       </div>
@@ -603,7 +724,79 @@ tr:last-child td{border-bottom:none;}
       </div>
     </section>
 
-    <!-- INSTELLINGEN -->
+    <!-- UPGRADE -->
+    <section id="upgrade">
+      <div id="demoBanner" style="display:none;background:linear-gradient(135deg,#F97316,#ea580c);color:#fff;padding:14px 20px;border-radius:12px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+        <div>
+          <div style="font-weight:700;font-size:15px">⭐ Demo account</div>
+          <div style="font-size:13px;opacity:.9" id="demoBannerTekst">Je hebt nog 5 facturen beschikbaar in de demo.</div>
+        </div>
+        <button onclick="showTab('upgrade')" style="background:rgba(255,255,255,.2);border:1.5px solid rgba(255,255,255,.5);color:#fff;padding:8px 16px;border-radius:8px;font-weight:600;cursor:pointer">Upgraden →</button>
+      </div>
+
+      <div id="abonnementActief" style="display:none" class="card" style="margin-bottom:20px">
+        <div class="card-title">✅ Actief abonnement</div>
+        <div id="abonnementInfo" style="color:var(--text2);font-size:14px;margin-top:8px"></div>
+        <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn-sec" onclick="beheerAbonnement()">🔧 Beheer abonnement</button>
+          <button class="btn-sec" onclick="factuurHistorie()">🧾 Betalingshistorie</button>
+        </div>
+      </div>
+
+      <div id="upgradeKaarten">
+        <div style="text-align:center;margin-bottom:28px">
+          <h2 style="color:var(--text1);font-size:22px;margin-bottom:6px">Kies je abonnement</h2>
+          <p style="color:var(--text3);font-size:14px">Onbeperkt facturen, geen watermerk, professioneel gebruik voor elk bedrijf</p>
+          <div style="display:inline-flex;background:var(--bg3);border-radius:10px;padding:4px;margin-top:12px;gap:2px">
+            <button id="periodBtn-maand"    class="period-btn active" onclick="selectPeriode('maand')">Maandelijks</button>
+            <button id="periodBtn-kwartaal" class="period-btn"        onclick="selectPeriode('kwartaal')">Per kwartaal</button>
+            <button id="periodBtn-jaar"     class="period-btn"        onclick="selectPeriode('jaar')">Jaarlijks</button>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;max-width:900px;margin:0 auto">
+          <!-- Demo kaart -->
+          <div class="upgrade-card" id="planDemoCard">
+            <div class="plan-badge demo-badge">Huidig</div>
+            <div class="plan-icon">🚀</div>
+            <div class="plan-naam">Demo</div>
+            <div class="plan-prijs">Gratis</div>
+            <div class="plan-periode">altijd</div>
+            <ul class="plan-features">
+              <li>✅ Max 5 facturen</li>
+              <li>✅ Alle factuurtypen</li>
+              <li>✅ Kenteken opzoeken (voertuigen)</li>
+              <li>⚠️ Watermerk op PDF</li>
+              <li>❌ Onbeperkt facturen</li>
+            </ul>
+            <button class="plan-btn plan-btn-demo" disabled>Huidig plan</button>
+          </div>
+
+          <!-- Betaald plan -->
+          <div class="upgrade-card upgrade-card-featured" id="planBetaaldCard">
+            <div class="plan-badge featured-badge">⭐ Aanbevolen</div>
+            <div class="plan-icon">💼</div>
+            <div class="plan-naam">Pro</div>
+            <div class="plan-prijs" id="planPrijs">—</div>
+            <div class="plan-periode" id="planPeriode">per maand</div>
+            <ul class="plan-features">
+              <li>✅ Onbeperkt facturen</li>
+              <li>✅ Geen watermerk</li>
+              <li>✅ Alle factuurtypen</li>
+              <li>✅ Kenteken opzoeken (voertuigen)</li>
+              <li>✅ Logo & huisstijl</li>
+              <li>✅ E-mail boekhouding</li>
+              <li>✅ Werkt voor elk bedrijf</li>
+            </ul>
+            <button class="plan-btn plan-btn-pro" onclick="startCheckout()" id="checkoutBtn">Starten →</button>
+          </div>
+        </div>
+
+        <p style="text-align:center;color:var(--text3);font-size:12px;margin-top:20px">
+          Betaling via Stripe · Veilig · Opzegbaar per periode
+        </p>
+      </div>
+    </section>
     <section id="instellingen">
       <div class="page-header"><div class="page-title">Bedrijfs<span>instellingen</span></div></div>
       <div class="card">
@@ -611,14 +804,14 @@ tr:last-child td{border-bottom:none;}
           <h3>Bedrijfsgegevens</h3>
           <div class="form-grid">
             <div class="form-group"><label>Bedrijfsnaam</label><input id="sNaam" placeholder="Garagebedrijf B.V."></div>
-            <div class="form-group"><label>Email</label><input id="sEmail" placeholder="info@garage.nl" type="email"></div>
+            <div class="form-group"><label>Email</label><input id="sEmail" placeholder="info@bedrijf.nl" type="email"></div>
             <div class="form-group"><label>Adres</label><input id="sAdres" placeholder="Straat 1"></div>
             <div class="form-group"><label>Plaats</label><input id="sPlaats" placeholder="Rotterdam"></div>
             <div class="form-group"><label>BTW-nummer</label><input id="sBtw" placeholder="NL123456789B01"></div>
             <div class="form-group"><label>KVK-nummer</label><input id="sKvk" placeholder="12345678"></div>
             <div class="form-group"><label>IBAN</label><input id="sIban" placeholder="NL00 BANK 0000 0000 00"></div>
             <div class="form-group"><label>Telefoon</label><input id="sTel" placeholder="+31 6 12345678"></div>
-            <div class="form-group"><label>Website</label><input id="sWebsite" placeholder="www.garage.nl"></div>
+            <div class="form-group"><label>Website</label><input id="sWebsite" placeholder="www.bedrijf.nl"></div>
           </div>
         </div>
         <div class="sett-section">
@@ -682,8 +875,8 @@ tr:last-child td{border-bottom:none;}
         </div>
         <div class="sett-section">
           <h3>Factuurvoet</h3>
-          <div class="form-group"><label>Standaard factuurtekst</label><textarea id="sTekst" placeholder="Betaling binnen 14 dagen. Geen garantie op gebruikte onderdelen."></textarea></div>
-          <div class="form-group"><label>Tekst auto-factuur voet <span style="color:var(--text3);font-weight:400">(verschijnt onder totaal)</span></label>
+          <div class="form-group"><label>Standaard factuurtekst</label><textarea id="sTekst" placeholder="Betaling binnen 14 dagen. Neem contact op bij vragen."></textarea></div>
+          <div class="form-group"><label>Voettekst voertuigfactuur <span style="color:var(--text3);font-weight:400">(verschijnt onder totaal bij voertuigverkoop)</span></label>
             <textarea id="sAutoVoet" placeholder="Als gezien en bereden d.d.:&#10;Geen garantie&#10;Finale kwijting" rows="3"></textarea>
           </div>
         </div>
@@ -1008,6 +1201,8 @@ async function verwerkIngelogdeGebruiker(user) {
     document.getElementById('sidebarEmail').textContent = email;
     document.getElementById('avatarLetter').textContent = (email[0]||'?').toUpperCase();
     renderAll();
+    verwerkAbonnementUI();
+    selectPeriode('maand');
   } else if (statusData === 'geweigerd') {
     document.getElementById('authScreen').style.display = 'flex';
     toonAuthTab('geweigerd');
@@ -1081,10 +1276,12 @@ dbAuth.auth.onAuthStateChange(async (event, session) => {
 });
 
 async function laadBedrijfId() {
-  const data = await dbGet('bedrijven', `?select=id,standaard_btw_type,standaard_btw_perc,factuur_prefix,factuur_volgnr,boekhouder_email&user_id=eq.${huidigGebruiker.id}`);
+  const data = await dbGet('bedrijven', `?select=id,standaard_btw_type,standaard_btw_perc,factuur_prefix,factuur_volgnr,boekhouder_email,abonnement_status,stripe_customer_id,stripe_subscription_id,abonnement_periode,abonnement_geldig_tot&user_id=eq.${huidigGebruiker.id}`);
   const bedrijf = Array.isArray(data) ? data[0] : data;
   huidigeBedrijfId = bedrijf?.id || null;
   window._bedrijfInst = bedrijf || {};
+  window._abonnementStatus = bedrijf?.abonnement_status || 'demo';
+  verwerkAbonnementUI();
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1184,8 +1381,10 @@ function showTab(id){
   if(id==='instellingen') laadInstellingenFormulier();
   if(id==='dashboard')    renderDashboard();
   if(id==='facturen')     renderFacturen();
+  if(id==='offertes')     renderOffertes();
   if(id==='klanten')      renderKlanten();
   if(id==='producten')    renderProducten();
+  if(id==='offerte')      initOfferteForm();
   if(id==='factuur'){
     const inst = window._bedrijfInst||{};
     const btwType = document.getElementById('btwType');
@@ -1219,7 +1418,7 @@ async function renderDashboard(){
       <div>
         <div class="recent-nr">${f.nr}</div>
         <div class="recent-klant">${f.klant_naam}</div>
-        <div class="recent-sub">${new Date(f.datum).toLocaleDateString('nl-NL')} · ${f.factuur_type==='auto'?(f.kenteken||'Auto'):'Dienst'}</div>
+        <div class="recent-sub">${new Date(f.datum).toLocaleDateString('nl-NL')} · ${f.factuur_type==='auto'?(f.kenteken||'Voertuig'):'Diensten'}</div>
       </div>
       <div style="display:flex;align-items:center;gap:12px">
         <div class="recent-amount">${eur(f.tot_incl)}</div>
@@ -1271,6 +1470,168 @@ function selectType(type){
 }
 
 let inkoopAutoOpen = false;
+// ══════════════════════════════════════════════════════════
+//  ABONNEMENT & DEMO LOGICA
+// ══════════════════════════════════════════════════════════
+
+const DEMO_MAX_FACTUREN = 5;
+let _geselecteerdePeriode = 'maand';
+
+// Prijzen — vul jouw Stripe prijzen in
+const ABONNEMENT_PRIJZEN = {
+  maand:    { label: 'per maand',    prijs: '—',   saving: '' },
+  kwartaal: { label: 'per kwartaal', prijs: '—',   saving: '(bespaar 10%)' },
+  jaar:     { label: 'per jaar',     prijs: '—',   saving: '(bespaar 20%)' },
+};
+
+function isDemo() {
+  return (window._abonnementStatus || 'demo') === 'demo';
+}
+
+async function verwerkAbonnementUI() {
+  const status = window._abonnementStatus || 'demo';
+  const isActief = status === 'actief';
+
+  // Demo topbar
+  const topBar = document.getElementById('demoTopBar');
+  if(topBar) topBar.style.display = isDemo() ? 'block' : 'none';
+
+  // Upgrade nav knop
+  const navBtn = document.getElementById('upgradeNavBtn');
+  const navLabel = document.getElementById('upgradeNavLabel');
+  if(navBtn){
+    if(isActief){
+      navBtn.style.color = '#22c55e';
+      if(navLabel) navLabel.textContent = '✅ Pro actief';
+    } else {
+      navBtn.style.color = '#F97316';
+      if(navLabel) navLabel.textContent = '⭐ Upgraden';
+    }
+  }
+
+  if(isDemo()){
+    // Tel facturen
+    const facturen = await dbGet('facturen', `?select=id&bedrijf_id=eq.${huidigeBedrijfId}`);
+    const aantalF = Array.isArray(facturen) ? facturen.length : 0;
+    const resterend = Math.max(0, DEMO_MAX_FACTUREN - aantalF);
+    const tekst = resterend > 0
+      ? `${resterend} van ${DEMO_MAX_FACTUREN} demo-facturen resterend`
+      : `Demo limiet bereikt — upgrade voor onbeperkt gebruik`;
+    const el1 = document.getElementById('demoTopBarTekst');
+    if(el1) el1.textContent = tekst;
+  }
+
+  // Upgrade pagina kaarten
+  const demoCard = document.getElementById('planDemoCard');
+  if(demoCard) demoCard.style.display = isDemo() ? 'flex' : 'none';
+
+  const actBox = document.getElementById('abonnementActief');
+  if(actBox) actBox.style.display = isActief ? 'block' : 'none';
+
+  if(isActief){
+    const inst = window._bedrijfInst;
+    const geldigTot = inst.abonnement_geldig_tot ? new Date(inst.abonnement_geldig_tot).toLocaleDateString('nl-NL') : '—';
+    const periode = inst.abonnement_periode || 'maand';
+    const el = document.getElementById('abonnementInfo');
+    if(el) el.innerHTML = `Actief Pro abonnement &nbsp;·&nbsp; <b>${periode}</b> plan &nbsp;·&nbsp; Geldig tot ${geldigTot}`;
+  }
+}
+
+async function checkDemoLimiet() {
+  if(!isDemo()) return true; // actief abonnement, altijd ok
+  const facturen = await dbGet('facturen', `?select=id&bedrijf_id=eq.${huidigeBedrijfId}`);
+  const aantalF = Array.isArray(facturen) ? facturen.length : 0;
+  if(aantalF >= DEMO_MAX_FACTUREN){
+    toast(`Demo limiet bereikt (${DEMO_MAX_FACTUREN} facturen). Upgrade voor onbeperkt gebruik.`, 'err');
+    setTimeout(() => showTab('upgrade'), 1200);
+    return false;
+  }
+  return true;
+}
+
+function selectPeriode(p){
+  _geselecteerdePeriode = p;
+  ['maand','kwartaal','jaar'].forEach(x => {
+    document.getElementById(`periodBtn-${x}`)?.classList.toggle('active', x===p);
+  });
+  const info = ABONNEMENT_PRIJZEN[p];
+  const prijsEl = document.getElementById('planPrijs');
+  const periodeEl = document.getElementById('planPeriode');
+  if(prijsEl) prijsEl.textContent = info.prijs;
+  if(periodeEl) periodeEl.textContent = info.label + (info.saving ? ' ' + info.saving : '');
+}
+
+async function startCheckout(){
+  const btn = document.getElementById('checkoutBtn');
+  if(btn){ btn.textContent = 'Laden…'; btn.disabled = true; }
+
+  const priceId = STRIPE_PRICES[_geselecteerdePeriode];
+  if(!priceId || priceId.startsWith('price_KWARTAAL')||priceId.startsWith('price_MAAND')||priceId.startsWith('price_JAAR')){
+    toast('Stripe Price IDs zijn nog niet ingevuld in de configuratie.', 'err');
+    if(btn){ btn.textContent = 'Starten →'; btn.disabled = false; }
+    return;
+  }
+
+  try {
+    // Roep de Supabase Edge Function aan om een Checkout sessie te maken
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/stripe-checkout`, {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json', 'Authorization': `Bearer ${window._accessToken}` },
+      body: JSON.stringify({
+        price_id: priceId,
+        periode: _geselecteerdePeriode,
+        success_url: window.location.href + '?checkout=success',
+        cancel_url:  window.location.href + '?checkout=cancel',
+      })
+    });
+    const data = await res.json();
+    if(data.url){
+      window.location.href = data.url;
+    } else {
+      toast(data.error || 'Checkout kon niet worden gestart.', 'err');
+      if(btn){ btn.textContent = 'Starten →'; btn.disabled = false; }
+    }
+  } catch(e) {
+    toast('Verbindingsfout: ' + e.message, 'err');
+    if(btn){ btn.textContent = 'Starten →'; btn.disabled = false; }
+  }
+}
+
+async function beheerAbonnement(){
+  // Stripe customer portal
+  try {
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/stripe-portal`, {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json', 'Authorization': `Bearer ${window._accessToken}` },
+      body: JSON.stringify({ return_url: window.location.href })
+    });
+    const data = await res.json();
+    if(data.url) window.location.href = data.url;
+    else toast(data.error || 'Kan portal niet openen.', 'err');
+  } catch(e) { toast('Verbindingsfout', 'err'); }
+}
+
+async function factuurHistorie(){
+  beheerAbonnement(); // Stripe portal bevat ook betalingshistorie
+}
+
+// Check checkout success/cancel na redirect
+(function checkCheckoutReturn(){
+  const params = new URLSearchParams(window.location.search);
+  if(params.get('checkout')==='success'){
+    toast('Betaling gelukt! Je abonnement wordt binnen enkele seconden geactiveerd.', 'ok');
+    history.replaceState(null,'',window.location.pathname);
+    // Herlaad status na 3 seconden (webhook verwerking)
+    setTimeout(async ()=>{
+      await laadBedrijfId();
+      await verwerkAbonnementUI();
+      toast('Abonnement actief! Veel succes.', 'ok');
+    }, 3000);
+  } else if(params.get('checkout')==='cancel'){
+    history.replaceState(null,'',window.location.pathname);
+  }
+})();
+
 function updateAutoprijsLabel(){
   const type = document.getElementById('autoBtwType')?.value;
   const labels = {marge:'Verkoopprijs (margeregeling)', excl:'Prijs excl. BTW', incl:'Prijs incl. BTW'};
@@ -1352,6 +1713,9 @@ async function maakFactuur(){
   if(!factuurType)    return toast('Selecteer een factuurtype','err');
   const klantNaam=document.getElementById('klantNaam').value.trim();
   if(!klantNaam)      return toast(factuurType==='inkoop'?'Vul naam verkoper in':'Vul een klantnaam in','err');
+
+  // Demo limiet check
+  if(!(await checkDemoLimiet())) return;
 
   const isAuto   = factuurType==='auto';
   const isInkoop = factuurType==='inkoop';
@@ -1533,10 +1897,11 @@ function renderFactuurRijen(data){
     tbody.innerHTML='<tr><td colspan="6"><div class="empty"><div class="empty-icon">📄</div><div class="empty-text">Geen facturen gevonden</div></div></td></tr>'; return;
   }
   const boekhouder = window._bedrijfInst?.boekhouder_email||'';
+  const typeLabels = {auto:'Voertuig', dienst:'Diensten', inkoop:'Inkoop', credit:'Credit'};
   tbody.innerHTML=data.map(f=>`<tr>
     <td><span style="font-family:Rajdhani,sans-serif;font-weight:700;color:var(--accent)">${f.nr}</span></td>
     <td style="color:var(--text)">${f.klant_naam}</td>
-    <td><span class="badge badge-${f.factuur_type}">${f.factuur_type}</span></td>
+    <td><span class="badge badge-${f.factuur_type}">${typeLabels[f.factuur_type]||f.factuur_type}</span></td>
     <td>${f.factuur_type==='auto'?`<span class="kenteken-display">${f.kenteken||''}</span>`:(f.klant_naam)}</td>
     <td><div style="font-family:Rajdhani,sans-serif;font-size:15px;font-weight:700;color:var(--text)">${eur(f.tot_incl)}</div>
         <div style="font-size:11px;color:var(--text3)">BTW: ${eur(f.tot_btw)}</div></td>
@@ -2160,6 +2525,21 @@ function genereerPDF(f, regels, S){
     if(totPages>1){ doc.setFontSize(7); doc.setTextColor(160,160,160); doc.text(`${p} / ${totPages}`, MR, PH-4.5); }
   }
 
+  // ════════════════════════════════
+  //  WATERMERK (demo)
+  // ════════════════════════════════
+  if(window._abonnementStatus === 'demo' || !window._abonnementStatus){
+    const totPages2 = doc.internal.getNumberOfPages();
+    for(let p=1; p<=totPages2; p++){
+      doc.setPage(p);
+      doc.saveGraphicsState();
+      doc.setGState(new doc.GState({opacity:0.08}));
+      doc.setFontSize(72); doc.setFont('helvetica','bold'); doc.setTextColor(0,0,0);
+      doc.text('DEMO', PW/2, PH/2, {align:'center', angle:45});
+      doc.restoreGraphicsState();
+    }
+  }
+
   doc.save(`${f.nr}.pdf`);
 }
 
@@ -2269,8 +2649,442 @@ async function mailFactuurBoekhouder(factuurId){
   await downloadPDF(factuurId);
   window.location.href = `mailto:${boekhouder}?subject=${onderwerp}&body=${body}`;
 }
+// ══════════════════════════════════════════════════════════
+//  OFFERTES
+// ══════════════════════════════════════════════════════════
+
+let offLines = [];
+let cachedOffertes = [];
+
+function round2(v){ return Math.round((+v||0)*100)/100; }
+
+function initOfferteForm(){
+  // Datums instellen
+  const vandaag = new Date();
+  const geldig  = new Date(); geldig.setDate(geldig.getDate()+30);
+  const fmt = d => d.toISOString().split('T')[0];
+  document.getElementById('offDatum').value    = fmt(vandaag);
+  document.getElementById('offGeldigTot').value= fmt(geldig);
+
+  // Klanten laden
+  const sel = document.getElementById('offKlantSelect');
+  sel.innerHTML = '<option value="">— Bestaande klant —</option>';
+  (cachedKlanten||[]).forEach(k=>{
+    const o=document.createElement('option'); o.value=k.id; o.textContent=k.naam; sel.appendChild(o);
+  });
+
+  // Producten laden
+  const psel = document.getElementById('offProductSelect');
+  psel.innerHTML = '<option value="">— Selecteer product —</option>';
+  (cachedProducten||[]).forEach(p=>{
+    const o=document.createElement('option'); o.value=JSON.stringify(p); o.textContent=p.naam; psel.appendChild(o);
+  });
+
+  const inst = window._bedrijfInst||{};
+  document.getElementById('offBtwType').value = inst.standaard_btw_type||'excl';
+  document.getElementById('offBtwPerc').value = inst.standaard_btw_perc||21;
+}
+
+function laadOffKlant(){
+  const sel = document.getElementById('offKlantSelect');
+  const id  = sel.value;
+  if(!id) return;
+  const k = (cachedKlanten||[]).find(k=>k.id===id);
+  if(!k) return;
+  document.getElementById('offKlantNaam').value   = k.naam||'';
+  document.getElementById('offKlantAdres').value  = k.adres||'';
+  document.getElementById('offKlantPlaats').value = k.plaats||'';
+  document.getElementById('offKlantEmail').value  = k.email||'';
+}
+
+function laadOffProduct(){
+  const sel = document.getElementById('offProductSelect');
+  if(!sel.value) return;
+  try {
+    const p = JSON.parse(sel.value);
+    document.getElementById('offProductNaam').value = p.naam||'';
+    document.getElementById('offPrijs').value       = p.prijs||'';
+    document.getElementById('offBtwPerc').value     = p.btw_perc||21;
+    document.getElementById('offBtwType').value     = p.btw_type||'excl';
+    document.getElementById('offAantal').value      = 1;
+  } catch(e){}
+}
+
+async function zoekAdresOff(){
+  const pc = document.getElementById('offPostcode').value.replace(/\s/g,'').toUpperCase();
+  const nr = document.getElementById('offHuisnummer').value.trim();
+  if(!pc||!nr) return toast('Vul postcode en huisnummer in','err');
+  try {
+    const r = await fetch(`https://api.pdok.nl/bzk/locatieserver/search/v3_1/free?q=${pc}+${nr}&rows=1`);
+    const d = await r.json();
+    const hit = d?.response?.docs?.[0];
+    if(hit){
+      document.getElementById('offKlantAdres').value  = `${hit.straatnaam||''} ${nr}`.trim();
+      document.getElementById('offKlantPlaats').value = hit.woonplaatsnaam||'';
+    } else toast('Adres niet gevonden','err');
+  } catch(e){ toast('Adres opzoeken mislukt','err'); }
+}
+
+function addOffLine(){
+  const naam   = document.getElementById('offProductNaam').value.trim();
+  const aantal = +document.getElementById('offAantal').value||1;
+  const prijs  = +document.getElementById('offPrijs').value||0;
+  const btwP   = +document.getElementById('offBtwPerc').value||21;
+  const btwT   = document.getElementById('offBtwType').value;
+  if(!naam||!prijs) return toast('Vul omschrijving en prijs in','err');
+
+  let exclTot, btwTot, inclTot;
+  if(btwT==='marge'){ exclTot=round2(aantal*prijs); btwTot=0; inclTot=exclTot; }
+  else if(btwT==='excl'){ exclTot=round2(aantal*prijs); btwTot=round2(exclTot*btwP/100); inclTot=round2(exclTot+btwTot); }
+  else { inclTot=round2(aantal*prijs); exclTot=round2(inclTot/(1+btwP/100)); btwTot=round2(inclTot-exclTot); }
+
+  offLines.push({naam, aantal, prijs, btwType:btwT, btwPerc:btwP, exclTot, btwTot, inclTot});
+  document.getElementById('offProductNaam').value='';
+  document.getElementById('offPrijs').value='';
+  document.getElementById('offAantal').value=1;
+  document.getElementById('offProductSelect').value='';
+  renderOffLines();
+}
+
+function renderOffLines(){
+  const eur = v=>'€'+((+v||0).toFixed(2).replace('.',','));
+  const isMarge = l => l.btwType==='marge';
+  document.getElementById('offLinesTbody').innerHTML = offLines.map((l,i)=>`
+    <tr>
+      <td>${l.naam} <span class="badge ${isMarge(l)?'badge-marge':'badge-dienst'}" style="font-size:10px">${isMarge(l)?'Marge':l.btwPerc+'%'}</span></td>
+      <td>${l.aantal}</td>
+      <td>${isMarge(l)?'—':eur(l.exclTot)}</td>
+      <td>${isMarge(l)?'Marge':l.btwPerc+'%'}</td>
+      <td>${isMarge(l)?'—':eur(l.btwTot)}</td>
+      <td style="font-weight:700">${eur(l.inclTot)}</td>
+      <td><button class="btn btn-danger btn-sm" onclick="removeOffLine(${i})">✕</button></td>
+    </tr>`).join('');
+  const totExcl = offLines.reduce((a,l)=>a+l.exclTot,0);
+  const totBtw  = offLines.reduce((a,l)=>a+l.btwTot,0);
+  const totIncl = offLines.reduce((a,l)=>a+l.inclTot,0);
+  document.getElementById('offSubtotaalExcl').textContent = eur(totExcl);
+  document.getElementById('offSubtotaalBTW').textContent  = eur(totBtw);
+  document.getElementById('offTotaal').textContent        = eur(totIncl);
+}
+
+function removeOffLine(i){ offLines.splice(i,1); renderOffLines(); }
+
+async function maakOfferte(){
+  if(!huidigeBedrijfId) return;
+  if(!(await checkDemoLimiet())) return;
+
+  const klantNaam = document.getElementById('offKlantNaam').value.trim();
+  if(!klantNaam) return toast('Vul een klantnaam in','err');
+  if(offLines.length===0) return toast('Voeg minimaal één regel toe','err');
+
+  const datum      = document.getElementById('offDatum').value;
+  const geldigTot  = document.getElementById('offGeldigTot').value;
+  const referentie = document.getElementById('offReferentie').value.trim();
+
+  const inst = window._bedrijfInst||{};
+  const prefix = 'OF';
+  const volgnr = (inst.offerte_volgnr||1);
+  const nr = `${prefix}${String(volgnr).padStart(4,'0')}`;
+
+  const totExcl = round2(offLines.reduce((a,l)=>a+l.exclTot,0));
+  const totBtw  = round2(offLines.reduce((a,l)=>a+l.btwTot,0));
+  const totIncl = round2(offLines.reduce((a,l)=>a+l.inclTot,0));
+
+  try {
+    const nieuwO = await dbInsert('offertes', {
+      bedrijf_id:   huidigeBedrijfId,
+      nr, datum, geldig_tot: geldigTot,
+      referentie:   referentie||null,
+      klant_naam:   klantNaam,
+      klant_adres:  document.getElementById('offKlantAdres').value.trim()||null,
+      klant_plaats: document.getElementById('offKlantPlaats').value.trim()||null,
+      klant_email:  document.getElementById('offKlantEmail').value.trim()||null,
+      tot_excl: totExcl, tot_btw: totBtw, tot_incl: totIncl,
+      status: 'concept',
+    });
+    if(!nieuwO?.id) throw new Error('Geen offerte ID terug');
+
+    // Regels opslaan
+    await Promise.all(offLines.map((l,idx)=>dbInsert('offerte_regels',{
+      offerte_id: nieuwO.id, bedrijf_id: huidigeBedrijfId,
+      naam:l.naam, aantal:l.aantal, prijs:l.prijs,
+      btw_type:l.btwType, btw_perc:l.btwPerc,
+      excl_tot:l.exclTot, btw_tot:l.btwTot, incl_tot:l.inclTot,
+      volgorde: idx+1,
+    })));
+
+    // Volgnr ophogen
+    await dbUpdate('bedrijven',`?id=eq.${huidigeBedrijfId}`,{offerte_volgnr: volgnr+1});
+    window._bedrijfInst.offerte_volgnr = volgnr+1;
+
+    // Reset
+    offLines=[];
+    ['offKlantNaam','offKlantAdres','offKlantPlaats','offKlantEmail','offReferentie','offProductNaam','offPrijs'].forEach(id=>{
+      const el=document.getElementById(id); if(el) el.value='';
+    });
+    document.getElementById('offAantal').value=1;
+    renderOffLines();
+    toast('✅ '+nr+' aangemaakt');
+    showTab('offertes');
+    await renderOffertes();
+    downloadOffertePDF(nieuwO.id);
+  } catch(e){ toast('Fout: '+e.message,'err'); }
+}
+
+async function renderOffertes(){
+  if(!huidigeBedrijfId) return;
+  cachedOffertes = await dbGet('offertes',`?select=*&bedrijf_id=eq.${huidigeBedrijfId}&order=aangemaakt_op.desc`);
+  toonOffertes(cachedOffertes);
+}
+
+function filterOffertes(){
+  const q = document.getElementById('zoekOfferte').value.toLowerCase();
+  toonOffertes(q ? cachedOffertes.filter(o=>
+    (o.klant_naam||'').toLowerCase().includes(q)||
+    (o.nr||'').toLowerCase().includes(q)||
+    (o.referentie||'').toLowerCase().includes(q)
+  ) : cachedOffertes);
+}
+
+const statusLabels = {concept:'Concept', verzonden:'Verzonden', geaccepteerd:'Geaccepteerd', verlopen:'Verlopen', omgezet:'Omgezet →Factuur'};
+
+function toonOffertes(data){
+  const tbody = document.getElementById('offerteBody');
+  if(!data||data.length===0){
+    tbody.innerHTML='<tr><td colspan="7"><div class="empty"><div class="empty-icon">📝</div><div class="empty-text">Nog geen offertes</div></div></td></tr>'; return;
+  }
+  const eur = v=>'€'+((+v||0).toFixed(2).replace('.',','));
+  const fmt = d => d ? new Date(d).toLocaleDateString('nl-NL') : '—';
+  tbody.innerHTML=data.map(o=>`<tr>
+    <td><span style="font-family:Rajdhani,sans-serif;font-weight:700;color:var(--accent)">${o.nr}</span></td>
+    <td>${o.klant_naam}${o.referentie?`<div style="font-size:11px;color:var(--text3)">${o.referentie}</div>`:''}</td>
+    <td>${fmt(o.datum)}</td>
+    <td style="${o.status!=='verlopen'&&new Date(o.geldig_tot)<new Date()?'color:var(--red)':''}">${fmt(o.geldig_tot)}</td>
+    <td><span class="badge badge-${o.status}">${statusLabels[o.status]||o.status}</span></td>
+    <td><div style="font-family:Rajdhani,sans-serif;font-size:15px;font-weight:700;color:var(--text)">${eur(o.tot_incl)}</div></td>
+    <td><div class="row-actions">
+      <button class="btn btn-ghost btn-sm" onclick="downloadOffertePDF('${o.id}')">📄 PDF</button>
+      <button class="btn btn-ghost btn-sm" onclick="wijzigOfferteStatus('${o.id}','verzonden')" title="Markeer als verzonden">📤</button>
+      <button class="btn btn-ghost btn-sm" onclick="wijzigOfferteStatus('${o.id}','geaccepteerd')" title="Geaccepteerd">✅</button>
+      <button class="btn btn-primary btn-sm" onclick="offerteNaarFactuur('${o.id}')" title="Omzetten naar factuur" ${o.status==='omgezet'?'disabled':''}>⚡ Factuur</button>
+      <button class="btn btn-danger btn-sm" onclick="verwijderOfferte('${o.id}')">✕</button>
+    </div></td>
+  </tr>`).join('');
+}
+
+async function wijzigOfferteStatus(id, status){
+  await dbUpdate('offertes',`?id=eq.${id}`,{status});
+  toast(`Status gewijzigd naar: ${statusLabels[status]}`);
+  await renderOffertes();
+}
+
+async function verwijderOfferte(id){
+  if(!confirm('Offerte verwijderen?')) return;
+  await dbDelete('offerte_regels',`?offerte_id=eq.${id}`);
+  await dbDelete('offertes',`?id=eq.${id}`);
+  toast('Offerte verwijderd');
+  await renderOffertes();
+}
+
+async function offerteNaarFactuur(offerteId){
+  const offerte = cachedOffertes.find(o=>o.id===offerteId);
+  if(!offerte) return toast('Offerte niet gevonden','err');
+  if(offerte.status==='omgezet') return toast('Al omgezet naar factuur','err');
+
+  const regels = await dbGet('offerte_regels',`?select=*&offerte_id=eq.${offerteId}&order=volgorde.asc`);
+  if(!regels||regels.length===0) return toast('Geen regels gevonden','err');
+
+  if(!confirm(`Offerte ${offerte.nr} omzetten naar factuur?`)) return;
+
+  const inst = window._bedrijfInst||{};
+  const prefix = inst.factuur_prefix||'F';
+  const volgnr = inst.factuur_volgnr||1;
+  const nr = `${prefix}${String(volgnr).padStart(4,'0')}`;
+  const vandaag = new Date().toISOString().split('T')[0];
+
+  try {
+    const nieuwF = await dbInsert('facturen',{
+      bedrijf_id:   huidigeBedrijfId,
+      nr, datum:    vandaag,
+      factuur_type: 'dienst',
+      klant_naam:   offerte.klant_naam,
+      klant_adres:  offerte.klant_adres,
+      klant_plaats: offerte.klant_plaats,
+      klant_email:  offerte.klant_email,
+      tot_excl: offerte.tot_excl, tot_btw: offerte.tot_btw, tot_incl: offerte.tot_incl,
+      offerte_id: offerteId,
+    });
+    if(!nieuwF?.id) throw new Error('Factuur aanmaken mislukt');
+
+    await Promise.all(regels.map((l,idx)=>dbInsert('factuur_regels',{
+      factuur_id: nieuwF.id, bedrijf_id: huidigeBedrijfId,
+      naam:l.naam, aantal:l.aantal, prijs:l.prijs,
+      btw_type:l.btw_type, btw_perc:l.btw_perc,
+      excl_tot:l.excl_tot, btw_tot:l.btw_tot, incl_tot:l.incl_tot,
+    })));
+
+    await dbUpdate('bedrijven',`?id=eq.${huidigeBedrijfId}`,{factuur_volgnr: volgnr+1});
+    window._bedrijfInst.factuur_volgnr = volgnr+1;
+    await dbUpdate('offertes',`?id=eq.${offerteId}`,{status:'omgezet'});
+
+    toast(`✅ Factuur ${nr} aangemaakt`);
+    await renderOffertes();
+    await renderFacturen();
+    downloadPDF(nieuwF.id);
+  } catch(e){ toast('Fout: '+e.message,'err'); }
+}
+
+async function downloadOffertePDF(id){
+  const o = cachedOffertes.find(o=>o.id===id) || (await dbGet('offertes',`?select=*&id=eq.${id}`))?.[0];
+  if(!o) return toast('Offerte niet gevonden','err');
+  const regels = await dbGet('offerte_regels',`?select=*&offerte_id=eq.${id}&order=volgorde.asc`);
+  const inst = window._bedrijfInst||{};
+  const S = await dbGet('bedrijven',`?select=*&id=eq.${huidigeBedrijfId}`);
+  genereerOffertePDF(o, regels||[], Array.isArray(S)?S[0]:S||inst);
+}
+
+function genereerOffertePDF(o, regels, S){
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF();
+  const PW=210, PH=297, ML=16, MR=194, CW=MR-ML;
+
+  const hex=S.factuur_kleur||'#F97316';
+  const cr=parseInt(hex.slice(1,3),16), cg=parseInt(hex.slice(3,5),16), cb=parseInt(hex.slice(5,7),16);
+  const clr=Math.round(cr*0.12+240*0.88), clg=Math.round(cg*0.12+242*0.88), clb=Math.round(cb*0.12+244*0.88);
+
+  function fmt(v){ const n=(+v||0).toFixed(2).split('.'); n[0]=n[0].replace(/\B(?=(\d{3})+(?!\d))/g,'.'); return '€ '+n[0]+','+n[1]; }
+  function setLabel(){ doc.setFontSize(6.5); doc.setFont('helvetica','bold'); doc.setTextColor(cr,cg,cb); }
+  function setBody(size=8.5){ doc.setFontSize(size); doc.setFont('helvetica','normal'); doc.setTextColor(40,40,40); }
+  function hline(y,lx=ML,rx=MR){ doc.setDrawColor(220,220,222); doc.setLineWidth(0.25); doc.line(lx,y,rx,y); }
+  function addFooter(){
+    doc.setFillColor(240,240,242); doc.rect(0,PH-12,PW,12,'F');
+    const parts=[S.kvk_nr?`KVK ${S.kvk_nr}`:'', S.iban||'', S.btw_nr?`BTW ${S.btw_nr}`:''].filter(Boolean);
+    doc.setFontSize(8); doc.setFont('helvetica','bold'); doc.setTextColor(30,30,30);
+    doc.text(parts.join('   ·   '), PW/2, PH-4.5, {align:'center'});
+  }
+  function checkPage(y,needed=12){
+    if(y+needed>PH-18){ addFooter(); doc.addPage(); doc.setFillColor(cr,cg,cb); doc.rect(0,0,PW,2,'F'); return 10; }
+    return y;
+  }
+
+  // HEADER
+  doc.setFillColor(cr,cg,cb); doc.rect(0,0,PW,2,'F');
+  if(S.logo_base64){ try{ doc.addImage(S.logo_base64,'',ML,5,34,20); }catch(e){} }
+  else { doc.setFontSize(14); doc.setFont('helvetica','bold'); doc.setTextColor(cr,cg,cb); doc.text(S.naam||'',ML,16); }
+  let ry=7;
+  if(S.logo_base64){ doc.setFontSize(9.5); doc.setFont('helvetica','bold'); doc.setTextColor(25,25,25); doc.text(S.naam||'',MR,ry,{align:'right'}); ry+=4.5; }
+  doc.setFontSize(7.5); doc.setFont('helvetica','normal'); doc.setTextColor(110,110,110);
+  const adresLine=[S.adres,S.plaats].filter(Boolean).join(', ');
+  if(adresLine){ doc.text(adresLine,MR,ry,{align:'right'}); ry+=4; }
+  const contactLine=[S.telefoon,S.email,S.website].filter(Boolean).join('  ·  ');
+  if(contactLine) doc.text(contactLine,MR,ry,{align:'right'});
+
+  // TYPE BALK — groen voor offerte
+  doc.setFillColor(cr,cg,cb); doc.rect(ML,30,CW,9,'F');
+  doc.setFontSize(9); doc.setFont('helvetica','bold'); doc.setTextColor(255,255,255);
+  doc.text('OFFERTE', ML+3, 36.2);
+  doc.text(o.nr, MR, 36.2, {align:'right'});
+
+  // KLANT + DATUM
+  const KY=43, DX=134;
+  setLabel(); doc.text('OFFERTE AAN', ML, KY);
+  doc.setFontSize(9.5); doc.setFont('helvetica','bold'); doc.setTextColor(15,15,15);
+  doc.text(o.klant_naam||'', ML, KY+6);
+  setBody(8); let ky=KY+11;
+  if(o.klant_adres)  { doc.text(o.klant_adres,  ML,ky); ky+=4.5; }
+  if(o.klant_plaats) { doc.text(o.klant_plaats, ML,ky); ky+=4.5; }
+  if(o.klant_email)  { doc.setTextColor(120,120,120); doc.text(o.klant_email, ML,ky); }
+
+  // Datum boxes
+  doc.setFillColor(clr,clg,clb); doc.rect(DX,KY,60,8,'F');
+  setLabel(); doc.text('OFFERTEDATUM', DX+2, KY+5.5);
+  setBody(8.5); doc.text(new Date(o.datum).toLocaleDateString('nl-NL'), DX+2, KY+5.5+5);
+
+  doc.setFillColor(clr,clg,clb); doc.rect(DX,KY+16,60,8,'F');
+  setLabel(); doc.text('OFFERTENUMMER', DX+2, KY+16+5.5);
+  setBody(8.5); doc.text(o.nr, DX+2, KY+16+5.5+5);
+
+  doc.setFillColor(clr,clg,clb); doc.rect(DX,KY+32,60,8,'F');
+  setLabel(); doc.text('GELDIG TOT', DX+2, KY+32+5.5);
+  setBody(8.5); doc.text(o.geldig_tot ? new Date(o.geldig_tot).toLocaleDateString('nl-NL') : '—', DX+2, KY+32+5.5+5);
+
+  let y=78; hline(y); y+=6;
+
+  // Referentie
+  if(o.referentie){
+    setLabel(); doc.text('UW REFERENTIE', ML, y);
+    setBody(9); doc.text(o.referentie, ML, y+6);
+    y+=14; hline(y); y+=6;
+  }
+
+  // REGELSTABEL
+  const C_DESC=ML+3, C_AANT=118, C_EXCL=145, C_BTW=165, C_INCL=MR;
+  y=checkPage(y,18);
+  doc.setFillColor(cr,cg,cb); doc.rect(ML,y,CW,8,'F');
+  doc.setFontSize(7.5); doc.setFont('helvetica','bold'); doc.setTextColor(255,255,255);
+  doc.text('OMSCHRIJVING',C_DESC,y+5.3);
+  doc.text('AANTAL',C_AANT,y+5.3,{align:'right'});
+  doc.text('EXCL.',C_EXCL,y+5.3,{align:'right'});
+  doc.text('BTW',C_BTW,y+5.3,{align:'right'});
+  doc.text('TOTAAL',C_INCL,y+5.3,{align:'right'});
+  y+=9;
+
+  regels.forEach((l,idx)=>{
+    y=checkPage(y,10);
+    const isMarge=l.btw_type==='marge';
+    const rh=9;
+    if(idx%2===0){ doc.setFillColor(250,250,252); doc.rect(ML,y,CW,rh,'F'); }
+    setBody(8.5);
+    doc.text(l.naam.substring(0,52),C_DESC,y+6);
+    doc.setTextColor(90,90,90);
+    doc.text(String(l.aantal||1),C_AANT,y+6,{align:'right'});
+    doc.text(isMarge?'—':fmt(l.excl_tot),C_EXCL,y+6,{align:'right'});
+    doc.text(isMarge?'marge':fmt(l.btw_tot),C_BTW,y+6,{align:'right'});
+    doc.setFont('helvetica','bold'); doc.setTextColor(25,25,25);
+    doc.text(fmt(l.incl_tot),C_INCL,y+6,{align:'right'});
+    doc.setDrawColor(232,232,235); doc.setLineWidth(0.2); doc.line(ML,y+rh,MR,y+rh);
+    y+=rh;
+  });
+
+  // TOTALEN
+  y+=4; y=checkPage(y,32);
+  const TOT_X=MR-72;
+  if(o.tot_btw&&o.tot_btw!==0){
+    setBody(8.5); doc.setTextColor(90,90,90);
+    doc.text('Subtotaal excl. BTW',TOT_X,y); doc.text(fmt(o.tot_excl),MR,y,{align:'right'}); y+=5.5;
+    doc.text('BTW',TOT_X,y); doc.text(fmt(o.tot_btw),MR,y,{align:'right'}); y+=4;
+    hline(y,TOT_X,MR); y+=4;
+  } else { hline(y,TOT_X,MR); y+=4; }
+  doc.setFillColor(cr,cg,cb); doc.rect(TOT_X-2,y,MR-TOT_X+2,11,'F');
+  doc.setFontSize(8.5); doc.setFont('helvetica','bold'); doc.setTextColor(255,255,255);
+  doc.text('TOTAAL',TOT_X+2,y+7.5);
+  doc.setFontSize(11); doc.text(fmt(o.tot_incl),MR,y+7.5,{align:'right'});
+  y+=17;
+
+  // GELDIGHEIDSVERKLARING
+  y=checkPage(y,16);
+  doc.setFillColor(clr,clg,clb); doc.rect(ML,y,CW,12,'F');
+  setLabel(); doc.text('GELDIGHEID', ML+3, y+5);
+  setBody(8); doc.text(`Deze offerte is geldig tot ${o.geldig_tot?new Date(o.geldig_tot).toLocaleDateString('nl-NL'):'—'}. Neem contact op om te accepteren.`, ML+3, y+10);
+  y+=16;
+
+  if(S.factuur_tekst){ y+=4; doc.setFontSize(8); doc.setTextColor(110,110,110); doc.splitTextToSize(S.factuur_tekst,CW).forEach(l=>{ y=checkPage(y,6); doc.text(l,ML,y); y+=5; }); }
+
+  // WATERMERK demo
+  if(window._abonnementStatus==='demo'||!window._abonnementStatus){
+    const tp=doc.internal.getNumberOfPages();
+    for(let p=1;p<=tp;p++){ doc.setPage(p); doc.saveGraphicsState(); doc.setGState(new doc.GState({opacity:0.08})); doc.setFontSize(72); doc.setFont('helvetica','bold'); doc.setTextColor(0,0,0); doc.text('DEMO',PW/2,PH/2,{align:'center',angle:45}); doc.restoreGraphicsState(); }
+  }
+
+  // FOOTER
+  const totP=doc.internal.getNumberOfPages();
+  for(let p=1;p<=totP;p++){ doc.setPage(p); addFooter(); if(totP>1){ doc.setFontSize(7); doc.setTextColor(160,160,160); doc.text(`${p} / ${totP}`,MR,PH-4.5); } }
+
+  doc.save(`${o.nr}.pdf`);
+}
+
 async function renderAll(){
-  await Promise.all([renderDashboard(), renderKlanten(), renderProducten(), renderFacturen()]);
+  await Promise.all([renderDashboard(), renderKlanten(), renderProducten(), renderFacturen(), renderOffertes()]);
 }
 </script>
 </body>
