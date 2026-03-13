@@ -7,6 +7,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/dist/umd/supabase.min.js"></script>
 <script src="https://js.stripe.com/v3/"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -445,11 +446,15 @@ tr:last-child td{border-bottom:none;}
       <button class="nav-btn" onclick="showTab('offerte')"><span class="icon">📝</span> Nieuwe Offerte</button>
       <button class="nav-btn" onclick="showTab('facturen')"><span class="icon">📄</span> Facturen</button>
       <button class="nav-btn" onclick="showTab('offertes')"><span class="icon">📋</span> Offertes</button>
+      <button class="nav-btn" onclick="showTab('uren')"><span class="icon">⏱️</span> Uren</button>
       <button class="nav-btn" onclick="showTab('terugkerend')"><span class="icon">🔁</span> Terugkerend</button>
       <button class="nav-btn" onclick="showTab('inkopen')"><span class="icon">📥</span> Inkopen</button>
+      <button class="nav-btn" onclick="showTab('kasbank')"><span class="icon">💰</span> Kas / Bank</button>
+      <button class="nav-btn" onclick="showTab('resultaten')"><span class="icon">📈</span> Resultatenrekening</button>
       <button class="nav-btn" onclick="showTab('klanten')"><span class="icon">👥</span> Klanten</button>
       <button class="nav-btn" onclick="showTab('producten')"><span class="icon">🔧</span> Producten</button>
       <div class="nav-label" style="margin-top:10px">Systeem</div>
+      <button class="nav-btn" onclick="showTab('export')"><span class="icon">📤</span> Exporteren</button>
       <button class="nav-btn" onclick="showTab('instellingen')"><span class="icon">⚙️</span> Instellingen</button>
       <button class="nav-btn" id="upgradeNavBtn" onclick="showTab('upgrade')" style="color:#F97316;font-weight:600"><span class="icon">⭐</span> <span id="upgradeNavLabel">Upgrade</span></button>
     </div>
@@ -511,6 +516,34 @@ tr:last-child td{border-bottom:none;}
       </div>
 
       <div class="card"><div class="card-title">Recente facturen</div><div id="recentFacturen"><div class="loading"><div class="spinner"></div></div></div></div>
+
+      <!-- KAS/BANK WIDGET -->
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+          <div class="card-title" style="margin:0">💰 Kas &amp; Bank</div>
+          <button class="btn btn-ghost btn-sm" onclick="showTab('kasbank')">Bekijk alles →</button>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+          <div style="background:var(--bg3);border-radius:10px;padding:14px;text-align:center">
+            <div style="font-size:11px;color:var(--text3);margin-bottom:4px">💵 Kassaldo</div>
+            <div style="font-size:22px;font-weight:800;color:var(--green)" id="dashKasSaldo">€0</div>
+          </div>
+          <div style="background:var(--bg3);border-radius:10px;padding:14px;text-align:center">
+            <div style="font-size:11px;color:var(--text3);margin-bottom:4px">🏦 Banksaldo</div>
+            <div style="font-size:22px;font-weight:800;color:var(--blue)" id="dashBankSaldo">€0</div>
+          </div>
+        </div>
+        <div style="font-size:12px;color:var(--text3);margin-bottom:8px;font-weight:600">Recente mutaties</div>
+        <div id="dashRecenteMutaties"><div class="loading"><div class="spinner"></div></div></div>
+      </div>
+
+      <!-- RESULTATEN WIDGET -->
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+          <div class="card-title" style="margin:0">📈 Resultatenrekening <span style="font-size:11px;color:var(--text3);font-weight:400">jaar tot nu</span></div>
+        </div>
+        <div id="dashResultaten"><div class="loading"><div class="spinner"></div></div></div>
+      </div>
     </section>
 
     <!-- FACTUUR MAKEN -->
@@ -797,6 +830,85 @@ tr:last-child td{border-bottom:none;}
       </div>
     </section>
 
+    <!-- UREN -->
+    <section id="uren">
+      <div class="page-header">
+        <div class="page-title">Uren<span>registratie</span></div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-sec" onclick="openModal('modalProject')">📁 Project</button>
+          <button class="btn btn-primary" onclick="openModal('modalUren')">➕ Uren invoeren</button>
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <div class="stats-grid" style="margin-bottom:16px">
+        <div class="stat-card"><div class="stat-label">Deze week</div><div class="stat-value" id="urenDezeWeek">0u</div></div>
+        <div class="stat-card blue"><div class="stat-label">Deze maand</div><div class="stat-value" id="urenDezeMaand">0u</div></div>
+        <div class="stat-card green"><div class="stat-label">Niet gefactureerd</div><div class="stat-value" id="urenNietGefact"><small>€</small>0</div></div>
+        <div class="stat-card red"><div class="stat-label">Openstaande uren</div><div class="stat-value" id="urenOpenstaand">0u</div></div>
+      </div>
+
+      <!-- Tabs -->
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+        <button id="urenTabUren"      class="btn btn-primary btn-sm" onclick="urenToonTab('uren')">⏱️ Uren</button>
+        <button id="urenTabProjecten" class="btn btn-sec btn-sm"     onclick="urenToonTab('projecten')">📁 Projecten</button>
+        <button id="urenTabOverzicht" class="btn btn-sec btn-sm"     onclick="urenToonTab('overzicht')">📊 Overzicht</button>
+      </div>
+
+      <!-- UREN LIJST -->
+      <div id="urenPanelUren">
+        <div class="card" style="padding:12px 16px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+          <select id="filterUrenKlant" onchange="filterUren()" style="width:180px">
+            <option value="">Alle klanten</option>
+          </select>
+          <select id="filterUrenProject" onchange="filterUren()" style="width:180px">
+            <option value="">Alle projecten</option>
+          </select>
+          <select id="filterUrenStatus" onchange="filterUren()" style="width:150px">
+            <option value="">Alle statussen</option>
+            <option value="open">Niet gefactureerd</option>
+            <option value="gefactureerd">Gefactureerd</option>
+          </select>
+          <input id="urenVan" type="date" onchange="filterUren()" style="width:140px">
+          <span style="color:var(--text3)">t/m</span>
+          <input id="urenTot" type="date" onchange="filterUren()" style="width:140px">
+        </div>
+        <div class="card" style="padding:0">
+          <div class="table-wrap">
+            <table><thead><tr><th>Datum</th><th>Klant</th><th>Project</th><th>Omschrijving</th><th>Uren</th><th>Tarief</th><th>Bedrag</th><th>Status</th><th>Acties</th></tr></thead>
+            <tbody id="urenBody"></tbody></table>
+          </div>
+        </div>
+        <div id="urenSelectieActies" style="display:none;margin-top:10px">
+          <button class="btn btn-primary" onclick="urenNaarFactuur()">⚡ Geselecteerde uren factureren</button>
+        </div>
+      </div>
+
+      <!-- PROJECTEN -->
+      <div id="urenPanelProjecten" style="display:none">
+        <div class="card" style="padding:0">
+          <div class="table-wrap">
+            <table><thead><tr><th>Project</th><th>Klant</th><th>Tarief</th><th>Totaal uren</th><th>Gefactureerd</th><th>Openstaand</th><th>Acties</th></tr></thead>
+            <tbody id="projectenBody"></tbody></table>
+          </div>
+        </div>
+      </div>
+
+      <!-- OVERZICHT -->
+      <div id="urenPanelOverzicht" style="display:none">
+        <div class="card">
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+            <div class="card-title" style="margin:0">Week/Maand overzicht</div>
+            <select id="overzichtPeriode" onchange="renderUrenOverzicht()" style="width:140px">
+              <option value="week">Per week</option>
+              <option value="maand">Per maand</option>
+            </select>
+          </div>
+          <div id="urenOverzichtGrid"></div>
+        </div>
+      </div>
+    </section>
+
     <!-- TERUGKERENDE FACTUREN -->
     <section id="terugkerend">
       <div class="page-header">
@@ -816,6 +928,206 @@ tr:last-child td{border-bottom:none;}
           <table><thead><tr><th>Klant</th><th>Omschrijving</th><th>Bedrag</th><th>Interval</th><th>Volgende</th><th>Status</th><th>Acties</th></tr></thead>
           <tbody id="terugkerendBody"><tr><td colspan="7"><div class="loading"><div class="spinner"></div></div></td></tr></tbody></table>
         </div>
+      </div>
+    </section>
+
+    <!-- KAS / BANK -->
+    <section id="kasbank">
+      <div class="page-header">
+        <div class="page-title">Kas / <span>Bank</span></div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-sec" onclick="openModal('modalBankImport')">📂 CSV / MT940 importeren</button>
+          <button class="btn btn-primary" onclick="openModal('modalKasMutatie')">➕ Mutatie toevoegen</button>
+        </div>
+      </div>
+
+      <!-- Saldo kaarten -->
+      <div class="stats-grid" style="margin-bottom:16px">
+        <div class="stat-card green"><div class="stat-label">Kassaldo</div><div class="stat-value" id="kbSaldoKas"><small>€</small>0</div></div>
+        <div class="stat-card blue"><div class="stat-label">Banksaldo</div><div class="stat-value" id="kbSaldoBank"><small>€</small>0</div></div>
+        <div class="stat-card"><div class="stat-label">Totaal inkomsten</div><div class="stat-value" id="kbTotaalIn"><small>€</small>0</div></div>
+        <div class="stat-card red"><div class="stat-label">Totaal uitgaven</div><div class="stat-value" id="kbTotaalUit"><small>€</small>0</div></div>
+      </div>
+
+      <!-- Tabs: Kasboek / Bank -->
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <button id="kbTabKas"  class="btn btn-primary btn-sm" onclick="kbToonTab('kas')">💵 Kasboek</button>
+        <button id="kbTabBank" class="btn btn-sec btn-sm"     onclick="kbToonTab('bank')">🏦 Bankafschriften</button>
+      </div>
+
+      <!-- KASBOEK -->
+      <div id="kbPanelKas">
+        <div class="card" style="padding:12px 16px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+          <input id="zoekKas" placeholder="🔍 Zoek omschrijving..." oninput="filterKas()" style="flex:1;min-width:180px">
+          <input id="kasVan" type="date" onchange="filterKas()" style="width:140px">
+          <span style="color:var(--text3)">t/m</span>
+          <input id="kasTot" type="date" onchange="filterKas()" style="width:140px">
+          <button class="btn btn-ghost btn-sm" onclick="resetKasFilter()">✕</button>
+        </div>
+        <div class="card" style="padding:0">
+          <div class="table-wrap">
+            <table><thead><tr><th>Datum</th><th>Omschrijving</th><th>Categorie</th><th>Rekening</th><th>Bij</th><th>Af</th><th>Saldo</th><th>Acties</th></tr></thead>
+            <tbody id="kasBody"><tr><td colspan="8"><div class="loading"><div class="spinner"></div></div></td></tr></tbody></table>
+          </div>
+        </div>
+      </div>
+
+      <!-- BANKAFSCHRIFTEN -->
+      <div id="kbPanelBank" style="display:none">
+        <div class="card">
+          <div class="card-title">Geüploade bankafschriften</div>
+          <div id="bankAfschriftenLijst"><div class="loading"><div class="spinner"></div></div></div>
+        </div>
+        <div class="card" style="padding:0;margin-top:12px">
+          <div class="table-wrap">
+            <table><thead><tr><th>Datum</th><th>Omschrijving</th><th>Tegenrekening</th><th>Bij</th><th>Af</th><th>Saldo</th></tr></thead>
+            <tbody id="bankBody"><tr><td colspan="6"><div class="empty"><div class="empty-icon">🏦</div><div class="empty-text">Importeer een bankafschrift</div></div></td></tr></tbody></table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- RESULTATENREKENING -->
+    <section id="resultaten">
+      <div class="page-header">
+        <div class="page-title">Resultaten<span>rekening</span></div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input id="resVan" type="date" onchange="renderResultaten()" style="width:140px">
+          <span style="color:var(--text3)">t/m</span>
+          <input id="resTot" type="date" onchange="renderResultaten()" style="width:140px">
+          <select id="resJaar" onchange="setResultatenJaar()" style="width:120px">
+          </select>
+        </div>
+      </div>
+
+      <!-- Winst/Verlies kaart -->
+      <div id="resWinstKaart" class="card" style="margin-bottom:16px;text-align:center;padding:24px">
+        <div style="font-size:13px;color:var(--text3);margin-bottom:6px">Netto resultaat</div>
+        <div id="resNetto" style="font-size:42px;font-weight:800">€0</div>
+        <div id="resNettoLabel" style="font-size:13px;color:var(--text3);margin-top:4px">Winst / Verlies</div>
+      </div>
+
+      <!-- Twee kolommen: Baten / Lasten -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+
+        <!-- BATEN -->
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+            <div class="card-title" style="margin:0;color:var(--green)">📈 Baten (inkomsten)</div>
+            <div id="resTotaalBaten" style="font-size:18px;font-weight:800;color:var(--green)">€0</div>
+          </div>
+          <div id="resBatenRijen"></div>
+        </div>
+
+        <!-- LASTEN -->
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+            <div class="card-title" style="margin:0;color:var(--red)">📉 Lasten (kosten)</div>
+            <div id="resTotaalLasten" style="font-size:18px;font-weight:800;color:var(--red)">€0</div>
+          </div>
+          <div id="resLastenRijen"></div>
+        </div>
+      </div>
+
+      <!-- BTW samenvatting -->
+      <div class="card">
+        <div class="card-title">🧾 BTW samenvatting</div>
+        <div id="resBtwSamenvatting" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-top:10px"></div>
+      </div>
+
+      <!-- Grafiek omzet per maand -->
+      <div class="card">
+        <div class="card-title">📊 Omzet per maand</div>
+        <div id="resGrafiek" style="margin-top:10px"></div>
+      </div>
+    </section>
+
+    <!-- EXPORT -->
+    <section id="export">
+      <div class="page-header">
+        <div class="page-title">Exporteren <span>Boekhouder</span></div>
+      </div>
+
+      <!-- Periode kiezen -->
+      <div class="card">
+        <div class="card-title">Periode</div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Van</label>
+            <input id="exportVan" type="date">
+          </div>
+          <div class="form-group">
+            <label>Tot</label>
+            <input id="exportTot" type="date">
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
+          <button class="btn btn-ghost btn-sm" onclick="setExportPeriode('q1')">Q1</button>
+          <button class="btn btn-ghost btn-sm" onclick="setExportPeriode('q2')">Q2</button>
+          <button class="btn btn-ghost btn-sm" onclick="setExportPeriode('q3')">Q3</button>
+          <button class="btn btn-ghost btn-sm" onclick="setExportPeriode('q4')">Q4</button>
+          <button class="btn btn-ghost btn-sm" onclick="setExportPeriode('jaar')">Heel jaar</button>
+          <button class="btn btn-ghost btn-sm" onclick="setExportPeriode('maand')">Deze maand</button>
+        </div>
+      </div>
+
+      <!-- Export opties -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px">
+
+        <!-- Facturen -->
+        <div class="card">
+          <div style="font-size:22px;margin-bottom:8px">📄</div>
+          <div class="card-title">Facturen overzicht</div>
+          <p style="font-size:13px;color:var(--text3);margin:6px 0 14px">Alle uitgaande facturen met klant, bedrag, BTW en betaalstatus.</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-primary btn-sm" onclick="exportFacturenExcel()">📊 Excel</button>
+            <button class="btn btn-sec btn-sm" onclick="exportFacturenPDF()">📄 PDF</button>
+          </div>
+        </div>
+
+        <!-- Inkopen -->
+        <div class="card">
+          <div style="font-size:22px;margin-bottom:8px">📥</div>
+          <div class="card-title">Inkopen overzicht</div>
+          <p style="font-size:13px;color:var(--text3);margin:6px 0 14px">Alle inkopen met leverancier, bedrag en BTW.</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-primary btn-sm" onclick="exportInkopenExcel()">📊 Excel</button>
+            <button class="btn btn-sec btn-sm" onclick="exportInkopenPDF()">📄 PDF</button>
+          </div>
+        </div>
+
+        <!-- BTW aangifte -->
+        <div class="card">
+          <div style="font-size:22px;margin-bottom:8px">🧾</div>
+          <div class="card-title">BTW-aangifte</div>
+          <p style="font-size:13px;color:var(--text3);margin:6px 0 14px">Samenvatting BTW ontvangen, betaald en af te dragen.</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-primary btn-sm" onclick="exportBtwExcel()">📊 Excel</button>
+            <button class="btn btn-sec btn-sm" onclick="exportBtwPDF()">📄 PDF</button>
+          </div>
+        </div>
+
+        <!-- Klanten -->
+        <div class="card">
+          <div style="font-size:22px;margin-bottom:8px">👥</div>
+          <div class="card-title">Klantenoverzicht</div>
+          <p style="font-size:13px;color:var(--text3);margin:6px 0 14px">Alle klanten met contactgegevens en totale omzet.</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-primary btn-sm" onclick="exportKlantenExcel()">📊 Excel</button>
+            <button class="btn btn-sec btn-sm" onclick="exportKlantenPDF()">📄 PDF</button>
+          </div>
+        </div>
+
+        <!-- Alles in één -->
+        <div class="card" style="border-color:var(--accent)">
+          <div style="font-size:22px;margin-bottom:8px">📦</div>
+          <div class="card-title" style="color:var(--accent)">Alles exporteren</div>
+          <p style="font-size:13px;color:var(--text3);margin:6px 0 14px">Facturen + inkopen + BTW in één Excel bestand met meerdere tabbladen.</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-primary" onclick="exportAllesExcel()">📊 Alles naar Excel</button>
+          </div>
+        </div>
+
       </div>
     </section>
 
@@ -1041,6 +1353,170 @@ tr:last-child td{border-bottom:none;}
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="sluitModal('modalFactuurEdit')">Annuleren</button>
       <button class="btn btn-primary" onclick="slaFactuurBewerkingOp()">Opslaan</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Kas mutatie -->
+<div class="modal-backdrop" id="modalKasMutatie">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="kasMutatieTitle">Mutatie toevoegen</div>
+    <div class="form-grid">
+      <div class="form-group"><label>Datum</label><input id="kmDatum" type="date"></div>
+      <div class="form-group"><label>Rekening</label>
+        <select id="kmRekening">
+          <option value="kas">💵 Kas</option>
+          <option value="bank">🏦 Bank</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Type</label>
+        <select id="kmType" onchange="updateKmBedragLabel()">
+          <option value="bij">Bij (inkomst)</option>
+          <option value="af">Af (uitgave)</option>
+        </select>
+      </div>
+      <div class="form-group"><label id="kmBedragLabel">Bedrag</label><input id="kmBedrag" type="number" placeholder="0.00" step="0.01"></div>
+    </div>
+    <div class="form-group"><label>Omschrijving</label><input id="kmOmschrijving" placeholder="Bijv. Contante betaling klant"></div>
+    <div class="form-group"><label>Categorie <span style="color:var(--text3);font-weight:400">(optioneel)</span></label>
+      <select id="kmCategorie">
+        <option value="">— Kies categorie —</option>
+        <option>Verkoop</option>
+        <option>Inkoop</option>
+        <option>Loon</option>
+        <option>Huur</option>
+        <option>Transport</option>
+        <option>Marketing</option>
+        <option>Kantoor</option>
+        <option>Belasting</option>
+        <option>Overig</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:16px">
+      <button class="btn btn-primary" onclick="slaKasMutatieOp()">💾 Opslaan</button>
+      <button class="btn btn-sec" onclick="closeModal('modalKasMutatie')">Annuleren</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Uren invoeren -->
+<div class="modal-backdrop" id="modalUren">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="urenModalTitel">Uren invoeren</div>
+    <div class="form-grid">
+      <div class="form-group"><label>Datum</label><input id="uDatum" type="date"></div>
+      <div class="form-group"><label>Klant</label>
+        <select id="uKlant" onchange="laadUrenProjecten()">
+          <option value="">— Selecteer klant —</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Project <span style="color:var(--text3);font-weight:400">(optioneel)</span></label>
+        <select id="uProject" onchange="laadUrenTarief()">
+          <option value="">— Geen project —</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Omschrijving</label><input id="uOmschrijving" placeholder="Wat heb je gedaan?"></div>
+      <div class="form-group"><label>Aantal uren</label><input id="uUren" type="number" placeholder="1.5" step="0.25" min="0.25" oninput="berekenUrenBedrag()"></div>
+      <div class="form-group"><label>Uurtarief (€)</label><input id="uTarief" type="number" placeholder="75.00" step="0.01" oninput="berekenUrenBedrag()"></div>
+      <div class="form-group"><label>BTW %</label>
+        <select id="uBtw" onchange="berekenUrenBedrag()">
+          <option value="21">21%</option>
+          <option value="9">9%</option>
+          <option value="0">0%</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Totaal</label>
+        <input id="uTotaal" readonly style="background:var(--bg3);font-weight:700;color:var(--accent)" placeholder="€0.00">
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:16px">
+      <button class="btn btn-primary" onclick="slaUrenOp()">💾 Opslaan</button>
+      <button class="btn btn-sec" onclick="closeModal('modalUren')">Annuleren</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Project -->
+<div class="modal-backdrop" id="modalProject">
+  <div class="modal" style="max-width:500px">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="projectModalTitel">Project aanmaken</div>
+    <div class="form-group"><label>Projectnaam</label><input id="pNaam" placeholder="Bijv. Website redesign"></div>
+    <div class="form-group"><label>Klant</label>
+      <select id="pKlant">
+        <option value="">— Selecteer klant —</option>
+      </select>
+    </div>
+    <div class="form-grid">
+      <div class="form-group"><label>Standaard uurtarief (€)</label><input id="pTarief" type="number" placeholder="75.00" step="0.01"></div>
+      <div class="form-group"><label>Budget (uren) <span style="color:var(--text3);font-weight:400">optioneel</span></label><input id="pBudget" type="number" placeholder="40" step="0.5"></div>
+    </div>
+    <div class="form-group"><label>Omschrijving <span style="color:var(--text3);font-weight:400">optioneel</span></label><textarea id="pOmschrijving" placeholder="Korte beschrijving van het project" rows="2"></textarea></div>
+    <div class="form-group"><label>Status</label>
+      <select id="pStatus">
+        <option value="actief">Actief</option>
+        <option value="afgerond">Afgerond</option>
+        <option value="gepauzeerd">Gepauzeerd</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:16px">
+      <button class="btn btn-primary" onclick="slaProjectOp()">💾 Opslaan</button>
+      <button class="btn btn-sec" onclick="closeModal('modalProject')">Annuleren</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Bank CSV Import -->
+<div class="modal-backdrop" id="modalBankImport">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Bankafschrift importeren</div>
+
+    <div id="bankImportStap1">
+      <p style="color:var(--text3);font-size:13px;margin-bottom:14px">Upload een CSV of MT940 (.sta / .mt940) bestand van je bank.</p>
+
+      <div class="form-group"><label>Bank</label>
+        <select id="bankNaam">
+          <option value="">— Selecteer bank —</option>
+          <option value="ing">ING</option>
+          <option value="rabo">Rabobank</option>
+          <option value="abn">ABN AMRO</option>
+          <option value="bunq">Bunq</option>
+          <option value="anders">Andere bank</option>
+        </select>
+      </div>
+
+      <!-- Formaat tabs -->
+      <div style="display:flex;gap:6px;margin-bottom:12px">
+        <button id="fmtBtnCsv"   class="btn btn-primary btn-sm" onclick="selectBankFormaat('csv')">📊 CSV</button>
+        <button id="fmtBtnMt940" class="btn btn-sec btn-sm"     onclick="selectBankFormaat('mt940')">🏦 MT940</button>
+      </div>
+
+      <div id="bankCsvVeld">
+        <div class="form-group"><label>CSV bestand</label>
+          <input id="bankCsvFile" type="file" accept=".csv,.txt" onchange="verwerkBankCsv(this)">
+        </div>
+        <div id="bankPreview" style="display:none">
+          <div style="font-weight:600;margin:12px 0 8px;color:var(--text1)">Kolommen koppelen</div>
+          <p style="font-size:12px;color:var(--text3);margin-bottom:10px">Koppel de kolommen uit jouw CSV aan de juiste velden:</p>
+          <div class="form-grid" id="bankKolomKoppelingGrid"></div>
+          <div style="background:var(--bg3);border-radius:8px;padding:10px;margin-top:8px;font-size:12px;color:var(--text3)" id="bankPreviewTabel"></div>
+        </div>
+      </div>
+
+      <div id="bankMt940Veld" style="display:none">
+        <div class="form-group"><label>MT940 bestand (.sta / .mt940 / .txt)</label>
+          <input id="bankMt940File" type="file" accept=".sta,.mt940,.txt,.swi" onchange="verwerkMt940(this)">
+        </div>
+        <div id="mt940Preview" style="display:none;background:var(--bg3);border-radius:8px;padding:10px;font-size:12px;color:var(--text3);margin-top:8px"></div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:10px;margin-top:16px">
+      <button class="btn btn-primary" id="bankImportBtn" onclick="importeerBankBestand()" style="display:none">📥 Importeren</button>
+      <button class="btn btn-sec" onclick="closeModal('modalBankImport')">Sluiten</button>
     </div>
   </div>
 </div>
@@ -1281,6 +1757,10 @@ function openModal(id){
   document.getElementById(id).classList.add('open');
   if(id==='modalTerugkerend') initTerugkerendModal();
   if(id==='modalInkoop')      initInkoopModal();
+  if(id==='modalKasMutatie')  initKasMutatieModal();
+  if(id==='modalBankImport')  initBankImportModal();
+  if(id==='modalUren')        initUrenModal();
+  if(id==='modalProject')     initProjectModal();
 }
 function sluitModal(id){ document.getElementById(id).classList.remove('open'); }
 document.querySelectorAll('.modal-backdrop').forEach(el=>{
@@ -1572,8 +2052,12 @@ function showTab(id){
   if(id==='dashboard')    renderDashboard();
   if(id==='facturen')     renderFacturen();
   if(id==='offertes')     renderOffertes();
+  if(id==='uren')         renderUren();
   if(id==='terugkerend')  renderTerugkerend();
   if(id==='inkopen')      renderInkopen();
+  if(id==='kasbank')      renderKasBank();
+  if(id==='resultaten')   initResultaten();
+  if(id==='export')       initExportForm();
   if(id==='klanten')      renderKlanten();
   if(id==='producten')    renderProducten();
   if(id==='offerte')      initOfferteForm();
@@ -1607,6 +2091,12 @@ async function renderDashboard(){
   document.getElementById('btwJaarLabel').textContent = window._btwJaar;
   await renderBtwKwartaal();
 
+  // Kas/Bank widget
+  await renderDashboardKasBank();
+
+  // Resultaten widget
+  await renderDashboardResultaten();
+
   const recent = await dbGet('facturen', `?select=*&bedrijf_id=eq.${huidigeBedrijfId}&order=aangemaakt_op.desc&limit=5`);
   const container=document.getElementById('recentFacturen');
   if(!recent||recent.length===0){ container.innerHTML='<div class="empty"><div class="empty-icon">📄</div><div class="empty-text">Nog geen facturen</div></div>'; return; }
@@ -1620,6 +2110,40 @@ async function renderDashboard(){
       <div style="display:flex;align-items:center;gap:12px">
         <div class="recent-amount">${eur(f.tot_incl)}</div>
         <button class="btn btn-ghost btn-sm" onclick="downloadPDF('${f.id}')">📄 PDF</button>
+      </div>
+    </div>`).join('');
+}
+
+async function renderDashboardKasBank(){
+  if(!huidigeBedrijfId) return;
+  const mutaties = await dbGet('kas_mutaties',
+    `?select=*&bedrijf_id=eq.${huidigeBedrijfId}&order=datum.desc&limit=100`) || [];
+
+  // Saldi berekenen
+  const kas  = mutaties.filter(m=>m.rekening==='kas');
+  const bank = mutaties.filter(m=>m.rekening==='bank');
+  const saldo = arr => arr.reduce((a,m)=>a+(m.type==='bij'?+m.bedrag:-m.bedrag),0);
+  const fmtS  = v => { const n=Math.abs(v); return (v<0?'-':'')+'€'+n.toFixed(2).replace('.',','); };
+
+  document.getElementById('dashKasSaldo').textContent  = fmtS(saldo(kas));
+  document.getElementById('dashBankSaldo').textContent = fmtS(saldo(bank));
+  document.getElementById('dashKasSaldo').style.color  = saldo(kas)  >= 0 ? 'var(--green)' : 'var(--red)';
+  document.getElementById('dashBankSaldo').style.color = saldo(bank) >= 0 ? 'var(--blue)'  : 'var(--red)';
+
+  // Recente 5 mutaties
+  const recent = mutaties.slice(0,5);
+  const el = document.getElementById('dashRecenteMutaties');
+  if(!recent.length){
+    el.innerHTML='<div style="color:var(--text3);font-size:13px;text-align:center;padding:10px">Nog geen mutaties</div>'; return;
+  }
+  el.innerHTML = recent.map(m=>`
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)">
+      <div>
+        <div style="font-size:13px;font-weight:500;color:var(--text1)">${m.omschrijving.substring(0,35)}</div>
+        <div style="font-size:11px;color:var(--text3)">${new Date(m.datum).toLocaleDateString('nl-NL')} · ${m.rekening==='kas'?'💵 Kas':'🏦 Bank'}</div>
+      </div>
+      <div style="font-weight:700;font-size:14px;color:${m.type==='bij'?'var(--green)':'var(--red)'}">
+        ${m.type==='bij'?'+':'-'}€${(+m.bedrag||0).toFixed(2).replace('.',',')}
       </div>
     </div>`).join('');
 }
@@ -1763,9 +2287,9 @@ let _geselecteerdePeriode = 'maand';
 
 // Prijzen — vul jouw Stripe prijzen in
 const ABONNEMENT_PRIJZEN = {
-  maand:    { label: 'per maand',    prijs: '—',   saving: '' },
-  kwartaal: { label: 'per kwartaal', prijs: '—',   saving: '(bespaar 10%)' },
-  jaar:     { label: 'per jaar',     prijs: '—',   saving: '(bespaar 20%)' },
+  maand:    { label: 'per maand',    prijs: '€15,00', saving: '' },
+  kwartaal: { label: 'per kwartaal', prijs: '€40,50', saving: '(bespaar 10%)' },
+  jaar:     { label: 'per jaar',     prijs: '€144,00', saving: '(bespaar 20%)' },
 };
 
 function isDemo() {
@@ -3849,6 +4373,1467 @@ function bekijkInkoopBijlage(id){
   } else {
     w.document.write(`<img src="${i.bijlage_base64}" style="max-width:100%">`);
   }
+}
+
+// ══════════════════════════════════════════════════════════
+//  EXPORT MODULE
+// ══════════════════════════════════════════════════════════
+
+function initExportForm(){
+  const nu    = new Date();
+  const van   = new Date(nu.getFullYear(), 0, 1).toISOString().split('T')[0];
+  const tot   = nu.toISOString().split('T')[0];
+  if(!document.getElementById('exportVan').value) document.getElementById('exportVan').value = van;
+  if(!document.getElementById('exportTot').value) document.getElementById('exportTot').value = tot;
+}
+
+function setExportPeriode(type){
+  const nu   = new Date();
+  const jaar = nu.getFullYear();
+  let van, tot;
+  if(type==='jaar'){  van=`${jaar}-01-01`; tot=`${jaar}-12-31`; }
+  else if(type==='maand'){ van=new Date(jaar,nu.getMonth(),1).toISOString().split('T')[0]; tot=nu.toISOString().split('T')[0]; }
+  else if(type==='q1'){ van=`${jaar}-01-01`; tot=`${jaar}-03-31`; }
+  else if(type==='q2'){ van=`${jaar}-04-01`; tot=`${jaar}-06-30`; }
+  else if(type==='q3'){ van=`${jaar}-07-01`; tot=`${jaar}-09-30`; }
+  else if(type==='q4'){ van=`${jaar}-10-01`; tot=`${jaar}-12-31`; }
+  document.getElementById('exportVan').value = van;
+  document.getElementById('exportTot').value = tot;
+}
+
+function getExportPeriode(){
+  const van = document.getElementById('exportVan').value;
+  const tot = document.getElementById('exportTot').value;
+  if(!van||!tot){ toast('Kies eerst een periode','err'); return null; }
+  return {van, tot};
+}
+
+async function getExportFacturen(van, tot){
+  return await dbGet('facturen', `?select=*&bedrijf_id=eq.${huidigeBedrijfId}&datum=gte.${van}&datum=lte.${tot}&order=datum.asc`) || [];
+}
+async function getExportInkopen(van, tot){
+  return await dbGet('inkopen', `?select=*&bedrijf_id=eq.${huidigeBedrijfId}&datum=gte.${van}&datum=lte.${tot}&order=datum.asc`) || [];
+}
+
+function fmtEur(v){ return (+v||0).toFixed(2).replace('.',','); }
+function fmtDatum(d){ return d ? new Date(d).toLocaleDateString('nl-NL') : ''; }
+
+// ── EXCEL helpers ──
+function downloadXlsx(wb, naam){
+  XLSX.writeFile(wb, naam);
+}
+
+function factuurRijenXlsx(facturen){
+  return facturen.map(f=>({
+    'Nr':           f.nr,
+    'Datum':        fmtDatum(f.datum),
+    'Klant':        f.klant_naam,
+    'Type':         f.factuur_type,
+    'Kenteken':     f.kenteken||'',
+    'Excl. BTW':    +f.tot_excl||0,
+    'BTW':          +f.tot_btw||0,
+    'Incl. BTW':    +f.tot_incl||0,
+    'Betaalstatus': f.betaal_status||'onbetaald',
+  }));
+}
+
+function inkoopRijenXlsx(inkopen){
+  return inkopen.map(i=>({
+    'Leverancier':   i.leverancier,
+    'Factuurnr.':    i.factuur_nr||'',
+    'Datum':         fmtDatum(i.datum),
+    'Vervaldatum':   fmtDatum(i.vervaldatum),
+    'Omschrijving':  i.omschrijving||'',
+    'Excl. BTW':     +i.excl_btw||0,
+    'BTW':           +i.btw_bedrag||0,
+    'Incl. BTW':     +i.incl_btw||0,
+    'Status':        i.status,
+  }));
+}
+
+// ── FACTUREN EXCEL ──
+async function exportFacturenExcel(){
+  const p = getExportPeriode(); if(!p) return;
+  toast('Excel aanmaken...');
+  const data = await getExportFacturen(p.van, p.tot);
+  if(!data.length){ toast('Geen facturen in deze periode','err'); return; }
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(factuurRijenXlsx(data));
+  ws['!cols'] = [{wch:10},{wch:12},{wch:25},{wch:12},{wch:12},{wch:12},{wch:12},{wch:12},{wch:14}];
+  XLSX.utils.book_append_sheet(wb, ws, 'Facturen');
+  downloadXlsx(wb, `Facturen_${p.van}_${p.tot}.xlsx`);
+  toast('✅ Excel gedownload');
+}
+
+// ── INKOPEN EXCEL ──
+async function exportInkopenExcel(){
+  const p = getExportPeriode(); if(!p) return;
+  toast('Excel aanmaken...');
+  const data = await getExportInkopen(p.van, p.tot);
+  if(!data.length){ toast('Geen inkopen in deze periode','err'); return; }
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(inkoopRijenXlsx(data));
+  ws['!cols'] = [{wch:25},{wch:14},{wch:12},{wch:12},{wch:25},{wch:12},{wch:12},{wch:12},{wch:12}];
+  XLSX.utils.book_append_sheet(wb, ws, 'Inkopen');
+  downloadXlsx(wb, `Inkopen_${p.van}_${p.tot}.xlsx`);
+  toast('✅ Excel gedownload');
+}
+
+// ── BTW EXCEL ──
+async function exportBtwExcel(){
+  const p = getExportPeriode(); if(!p) return;
+  toast('Excel aanmaken...');
+  const [facturen, inkopen] = await Promise.all([getExportFacturen(p.van, p.tot), getExportInkopen(p.van, p.tot)]);
+  const btwOntvangen = facturen.filter(f=>f.factuur_type!=='credit').reduce((a,f)=>a+(+f.tot_btw||0),0);
+  const btwCredit    = facturen.filter(f=>f.factuur_type==='credit').reduce((a,f)=>a+Math.abs(+f.tot_btw||0),0);
+  const btwInkoop    = inkopen.reduce((a,i)=>a+(+i.btw_bedrag||0),0);
+  const netto        = round2(btwOntvangen - btwCredit - btwInkoop);
+  const rows = [
+    {'Omschrijving':'BTW ontvangen (verkopen)',    'Bedrag': round2(btwOntvangen)},
+    {'Omschrijving':'BTW gecrediteerd',             'Bedrag': -round2(btwCredit)},
+    {'Omschrijving':'BTW inkopen (aftrekbaar)',      'Bedrag': -round2(btwInkoop)},
+    {'Omschrijving':'',                             'Bedrag': ''},
+    {'Omschrijving': netto>=0?'Af te dragen':'Terug te vorderen', 'Bedrag': netto},
+  ];
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws['!cols'] = [{wch:35},{wch:14}];
+  XLSX.utils.book_append_sheet(wb, ws, 'BTW Aangifte');
+  downloadXlsx(wb, `BTW_${p.van}_${p.tot}.xlsx`);
+  toast('✅ Excel gedownload');
+}
+
+// ── KLANTEN EXCEL ──
+async function exportKlantenExcel(){
+  const p = getExportPeriode(); if(!p) return;
+  toast('Excel aanmaken...');
+  const [klanten, facturen] = await Promise.all([
+    dbGet('klanten', `?select=*&bedrijf_id=eq.${huidigeBedrijfId}&order=naam.asc`) || [],
+    getExportFacturen(p.van, p.tot),
+  ]);
+  const rows = (klanten||[]).map(k=>{
+    const kFacturen = facturen.filter(f=>f.klant_naam===k.naam);
+    return {
+      'Naam':       k.naam,
+      'Adres':      k.adres||'',
+      'Plaats':     k.plaats||'',
+      'Email':      k.email||'',
+      'Facturen':   kFacturen.length,
+      'Omzet':      round2(kFacturen.reduce((a,f)=>a+(+f.tot_incl||0),0)),
+    };
+  });
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws['!cols'] = [{wch:25},{wch:25},{wch:18},{wch:28},{wch:10},{wch:12}];
+  XLSX.utils.book_append_sheet(wb, ws, 'Klanten');
+  downloadXlsx(wb, `Klanten_${p.van}_${p.tot}.xlsx`);
+  toast('✅ Excel gedownload');
+}
+
+// ── ALLES IN ÉÉN EXCEL ──
+async function exportAllesExcel(){
+  const p = getExportPeriode(); if(!p) return;
+  toast('Excel aanmaken...');
+  const [facturen, inkopen, klanten] = await Promise.all([
+    getExportFacturen(p.van, p.tot),
+    getExportInkopen(p.van, p.tot),
+    dbGet('klanten', `?select=*&bedrijf_id=eq.${huidigeBedrijfId}&order=naam.asc`),
+  ]);
+
+  const wb = XLSX.utils.book_new();
+
+  // Tabblad 1: Facturen
+  const wsF = XLSX.utils.json_to_sheet(factuurRijenXlsx(facturen));
+  wsF['!cols'] = [{wch:10},{wch:12},{wch:25},{wch:12},{wch:12},{wch:12},{wch:12},{wch:12},{wch:14}];
+  XLSX.utils.book_append_sheet(wb, wsF, 'Facturen');
+
+  // Tabblad 2: Inkopen
+  const wsI = XLSX.utils.json_to_sheet(inkoopRijenXlsx(inkopen));
+  wsI['!cols'] = [{wch:25},{wch:14},{wch:12},{wch:12},{wch:25},{wch:12},{wch:12},{wch:12},{wch:12}];
+  XLSX.utils.book_append_sheet(wb, wsI, 'Inkopen');
+
+  // Tabblad 3: BTW
+  const btwOntvangen = facturen.filter(f=>f.factuur_type!=='credit').reduce((a,f)=>a+(+f.tot_btw||0),0);
+  const btwCredit    = facturen.filter(f=>f.factuur_type==='credit').reduce((a,f)=>a+Math.abs(+f.tot_btw||0),0);
+  const btwInkoop    = inkopen.reduce((a,i)=>a+(+i.btw_bedrag||0),0);
+  const netto        = round2(btwOntvangen - btwCredit - btwInkoop);
+  const wsBtw = XLSX.utils.json_to_sheet([
+    {'Omschrijving':'Periode',                       'Bedrag': `${fmtDatum(p.van)} t/m ${fmtDatum(p.tot)}`},
+    {'Omschrijving':'BTW ontvangen',                 'Bedrag': round2(btwOntvangen)},
+    {'Omschrijving':'BTW gecrediteerd',              'Bedrag': -round2(btwCredit)},
+    {'Omschrijving':'BTW inkopen (aftrekbaar)',       'Bedrag': -round2(btwInkoop)},
+    {'Omschrijving':'',                              'Bedrag': ''},
+    {'Omschrijving': netto>=0?'Af te dragen':'Terug te vorderen', 'Bedrag': netto},
+  ]);
+  wsBtw['!cols'] = [{wch:35},{wch:18}];
+  XLSX.utils.book_append_sheet(wb, wsBtw, 'BTW Aangifte');
+
+  // Tabblad 4: Klanten
+  const klantRows = (klanten||[]).map(k=>({
+    'Naam': k.naam, 'Adres': k.adres||'', 'Plaats': k.plaats||'', 'Email': k.email||'',
+  }));
+  const wsK = XLSX.utils.json_to_sheet(klantRows);
+  wsK['!cols'] = [{wch:25},{wch:25},{wch:18},{wch:28}];
+  XLSX.utils.book_append_sheet(wb, wsK, 'Klanten');
+
+  downloadXlsx(wb, `Boekhouding_${p.van}_${p.tot}.xlsx`);
+  toast('✅ Alles geëxporteerd naar Excel');
+}
+
+// ── PDF EXPORTS ──
+function exportPDFBase(titel, headers, rijen, bestandsnaam, S, extraInfo=''){
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF();
+  const PW=210, ML=14, MR=196, CW=MR-ML;
+  const hex=S?.factuur_kleur||'#F97316';
+  const cr=parseInt(hex.slice(1,3),16), cg=parseInt(hex.slice(3,5),16), cb=parseInt(hex.slice(5,7),16);
+
+  doc.setFillColor(cr,cg,cb); doc.rect(0,0,PW,2,'F');
+  doc.setFontSize(16); doc.setFont('helvetica','bold'); doc.setTextColor(cr,cg,cb);
+  doc.text(titel, ML, 14);
+  doc.setFontSize(9); doc.setFont('helvetica','normal'); doc.setTextColor(120,120,120);
+  doc.text(`${S?.naam||''} · Gegenereerd op ${new Date().toLocaleDateString('nl-NL')}`, ML, 21);
+  if(extraInfo){ doc.text(extraInfo, ML, 27); }
+
+  let y = extraInfo ? 34 : 28;
+  const colW = CW / headers.length;
+
+  // Header rij
+  doc.setFillColor(cr,cg,cb); doc.rect(ML, y, CW, 8, 'F');
+  doc.setFontSize(7.5); doc.setFont('helvetica','bold'); doc.setTextColor(255,255,255);
+  headers.forEach((h,i) => doc.text(h, ML+3+i*colW, y+5.5));
+  y += 9;
+
+  // Data rijen
+  rijen.forEach((rij, idx)=>{
+    if(y > 272){ doc.addPage(); doc.setFillColor(cr,cg,cb); doc.rect(0,0,PW,2,'F'); y=14; }
+    if(idx%2===0){ doc.setFillColor(250,250,252); doc.rect(ML,y,CW,7,'F'); }
+    doc.setFontSize(7.5); doc.setFont('helvetica','normal'); doc.setTextColor(30,30,30);
+    rij.forEach((cel,i) => doc.text(String(cel||'').substring(0,28), ML+3+i*colW, y+5));
+    y += 7;
+  });
+
+  // Totaalregel
+  y += 4;
+  doc.setDrawColor(220,220,222); doc.setLineWidth(0.3); doc.line(ML,y,MR,y);
+
+  // Footer
+  const totPag = doc.internal.getNumberOfPages();
+  for(let p=1;p<=totPag;p++){
+    doc.setPage(p);
+    doc.setFillColor(240,240,242); doc.rect(0,287,PW,10,'F');
+    const parts=[S?.kvk_nr?`KVK ${S.kvk_nr}`:'', S?.iban||'', S?.btw_nr?`BTW ${S.btw_nr}`:''].filter(Boolean);
+    doc.setFontSize(7); doc.setFont('helvetica','normal'); doc.setTextColor(100,100,100);
+    doc.text(parts.join('  ·  '), PW/2, 293, {align:'center'});
+    if(totPag>1) doc.text(`${p}/${totPag}`, MR, 293);
+  }
+  doc.save(bestandsnaam);
+}
+
+async function exportFacturenPDF(){
+  const p = getExportPeriode(); if(!p) return;
+  const data = await getExportFacturen(p.van, p.tot);
+  if(!data.length){ toast('Geen facturen in deze periode','err'); return; }
+  const S = window._bedrijfInst||{};
+  const headers = ['Nr','Datum','Klant','Type','Excl.','BTW','Incl.','Status'];
+  const rijen = data.map(f=>[f.nr, fmtDatum(f.datum), (f.klant_naam||'').substring(0,20), f.factuur_type, fmtEur(f.tot_excl), fmtEur(f.tot_btw), fmtEur(f.tot_incl), f.betaal_status||'onbetaald']);
+  const totIncl = data.reduce((a,f)=>a+(+f.tot_incl||0),0);
+  exportPDFBase(`Facturen overzicht`, headers, rijen, `Facturen_${p.van}_${p.tot}.pdf`, S, `Periode: ${fmtDatum(p.van)} t/m ${fmtDatum(p.tot)}  ·  Totaal: €${fmtEur(totIncl)}  ·  Aantal: ${data.length}`);
+  toast('✅ PDF gedownload');
+}
+
+async function exportInkopenPDF(){
+  const p = getExportPeriode(); if(!p) return;
+  const data = await getExportInkopen(p.van, p.tot);
+  if(!data.length){ toast('Geen inkopen in deze periode','err'); return; }
+  const S = window._bedrijfInst||{};
+  const headers = ['Leverancier','Factuurnr.','Datum','Excl.','BTW','Incl.','Status'];
+  const rijen = data.map(i=>[(i.leverancier||'').substring(0,20), i.factuur_nr||'', fmtDatum(i.datum), fmtEur(i.excl_btw), fmtEur(i.btw_bedrag), fmtEur(i.incl_btw), i.status]);
+  const totIncl = data.reduce((a,i)=>a+(+i.incl_btw||0),0);
+  exportPDFBase('Inkopen overzicht', headers, rijen, `Inkopen_${p.van}_${p.tot}.pdf`, S, `Periode: ${fmtDatum(p.van)} t/m ${fmtDatum(p.tot)}  ·  Totaal: €${fmtEur(totIncl)}`);
+  toast('✅ PDF gedownload');
+}
+
+async function exportBtwPDF(){
+  const p = getExportPeriode(); if(!p) return;
+  const [facturen, inkopen] = await Promise.all([getExportFacturen(p.van, p.tot), getExportInkopen(p.van, p.tot)]);
+  const S = window._bedrijfInst||{};
+  const btwOntvangen = round2(facturen.filter(f=>f.factuur_type!=='credit').reduce((a,f)=>a+(+f.tot_btw||0),0));
+  const btwCredit    = round2(facturen.filter(f=>f.factuur_type==='credit').reduce((a,f)=>a+Math.abs(+f.tot_btw||0),0));
+  const btwInkoop    = round2(inkopen.reduce((a,i)=>a+(+i.btw_bedrag||0),0));
+  const netto        = round2(btwOntvangen - btwCredit - btwInkoop);
+  const headers = ['Omschrijving','Bedrag'];
+  const rijen = [
+    ['BTW ontvangen (verkopen)', `€${fmtEur(btwOntvangen)}`],
+    ['BTW gecrediteerd',         `-€${fmtEur(btwCredit)}`],
+    ['BTW inkopen (aftrekbaar)', `-€${fmtEur(btwInkoop)}`],
+    ['',''],
+    [netto>=0?'Af te dragen':'Terug te vorderen', `€${fmtEur(Math.abs(netto))}`],
+  ];
+  exportPDFBase('BTW-aangifte', headers, rijen, `BTW_${p.van}_${p.tot}.pdf`, S, `Periode: ${fmtDatum(p.van)} t/m ${fmtDatum(p.tot)}`);
+  toast('✅ PDF gedownload');
+}
+
+async function exportKlantenPDF(){
+  const p = getExportPeriode(); if(!p) return;
+  const [klanten, facturen] = await Promise.all([
+    dbGet('klanten', `?select=*&bedrijf_id=eq.${huidigeBedrijfId}&order=naam.asc`),
+    getExportFacturen(p.van, p.tot),
+  ]);
+  const S = window._bedrijfInst||{};
+  const headers = ['Naam','Adres','Plaats','Email','Facturen','Omzet'];
+  const rijen = (klanten||[]).map(k=>{
+    const kF = facturen.filter(f=>f.klant_naam===k.naam);
+    return [(k.naam||'').substring(0,20), k.adres||'', k.plaats||'', (k.email||'').substring(0,22), kF.length, `€${fmtEur(kF.reduce((a,f)=>a+(+f.tot_incl||0),0))}`];
+  });
+  exportPDFBase('Klantenoverzicht', headers, rijen, `Klanten_${p.van}_${p.tot}.pdf`, S, `Periode: ${fmtDatum(p.van)} t/m ${fmtDatum(p.tot)}`);
+  toast('✅ PDF gedownload');
+}
+
+// ══════════════════════════════════════════════════════════
+//  KAS / BANK
+// ══════════════════════════════════════════════════════════
+
+let cachedKasMutaties  = [];
+let cachedBankRegels   = [];
+let _bankCsvData       = null;
+let _bankCsvHeaders    = [];
+let _bewerkKasId       = null;
+let _huidigKbTab       = 'kas';
+
+function kbToonTab(tab){
+  _huidigKbTab = tab;
+  document.getElementById('kbPanelKas').style.display  = tab==='kas'  ? 'block':'none';
+  document.getElementById('kbPanelBank').style.display = tab==='bank' ? 'block':'none';
+  document.getElementById('kbTabKas').className  = tab==='kas'  ? 'btn btn-primary btn-sm':'btn btn-sec btn-sm';
+  document.getElementById('kbTabBank').className = tab==='bank' ? 'btn btn-primary btn-sm':'btn btn-sec btn-sm';
+  if(tab==='bank') renderBankAfschriften();
+}
+
+function initKasMutatieModal(){
+  _bewerkKasId = null;
+  document.getElementById('kasMutatieTitle').textContent = 'Mutatie toevoegen';
+  document.getElementById('kmDatum').value       = new Date().toISOString().split('T')[0];
+  document.getElementById('kmBedrag').value      = '';
+  document.getElementById('kmOmschrijving').value= '';
+  document.getElementById('kmType').value        = 'bij';
+  document.getElementById('kmRekening').value    = 'kas';
+  document.getElementById('kmCategorie').value   = '';
+  updateKmBedragLabel();
+}
+
+function updateKmBedragLabel(){
+  const type = document.getElementById('kmType').value;
+  document.getElementById('kmBedragLabel').textContent = type==='bij' ? 'Bedrag (inkomst)' : 'Bedrag (uitgave)';
+}
+
+async function slaKasMutatieOp(){
+  const datum       = document.getElementById('kmDatum').value;
+  const rekening    = document.getElementById('kmRekening').value;
+  const type        = document.getElementById('kmType').value;
+  const bedrag      = +document.getElementById('kmBedrag').value||0;
+  const omschrijving= document.getElementById('kmOmschrijving').value.trim();
+  const categorie   = document.getElementById('kmCategorie').value;
+
+  if(!datum)        return toast('Vul een datum in','err');
+  if(!omschrijving) return toast('Vul een omschrijving in','err');
+  if(!bedrag)       return toast('Vul een bedrag in','err');
+
+  const body = {
+    bedrijf_id: huidigeBedrijfId,
+    datum, rekening, type,
+    bedrag: round2(bedrag),
+    omschrijving,
+    categorie: categorie||null,
+    bron: 'handmatig',
+  };
+
+  try {
+    if(_bewerkKasId){
+      await dbUpdate('kas_mutaties',`?id=eq.${_bewerkKasId}`, body);
+      toast('✅ Mutatie bijgewerkt');
+    } else {
+      await dbInsert('kas_mutaties', body);
+      toast('✅ Mutatie toegevoegd');
+    }
+    closeModal('modalKasMutatie');
+    await renderKasBank();
+  } catch(e){ toast('Fout: '+e.message,'err'); }
+}
+
+async function renderKasBank(){
+  if(!huidigeBedrijfId) return;
+  cachedKasMutaties = await dbGet('kas_mutaties',
+    `?select=*&bedrijf_id=eq.${huidigeBedrijfId}&order=datum.asc,aangemaakt_op.asc`) || [];
+  updateKbStats();
+  filterKas();
+}
+
+function updateKbStats(){
+  const kas  = cachedKasMutaties.filter(m=>m.rekening==='kas');
+  const bank = cachedKasMutaties.filter(m=>m.rekening==='bank');
+  const saldo = arr => arr.reduce((a,m)=> a + (m.type==='bij'?+m.bedrag:-m.bedrag), 0);
+  const totIn  = cachedKasMutaties.filter(m=>m.type==='bij').reduce((a,m)=>a+(+m.bedrag||0),0);
+  const totUit = cachedKasMutaties.filter(m=>m.type==='af').reduce((a,m)=>a+(+m.bedrag||0),0);
+  const fmtS = v => { const n=Math.abs(v); return (v<0?'-':'')+'€'+n.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,'.'); };
+  document.getElementById('kbSaldoKas').innerHTML  = `<small>€</small>${saldo(kas).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,'.')}`;
+  document.getElementById('kbSaldoBank').innerHTML = `<small>€</small>${saldo(bank).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,'.')}`;
+  document.getElementById('kbTotaalIn').innerHTML  = `<small>€</small>${totIn.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,'.')}`;
+  document.getElementById('kbTotaalUit').innerHTML = `<small>€</small>${totUit.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,'.')}`;
+}
+
+function resetKasFilter(){
+  document.getElementById('zoekKas').value = '';
+  document.getElementById('kasVan').value  = '';
+  document.getElementById('kasTot').value  = '';
+  filterKas();
+}
+
+function filterKas(){
+  const q   = (document.getElementById('zoekKas')?.value||'').toLowerCase();
+  const van = document.getElementById('kasVan')?.value||'';
+  const tot = document.getElementById('kasTot')?.value||'';
+  const data = cachedKasMutaties.filter(m=>{
+    if(q   && !(m.omschrijving||'').toLowerCase().includes(q) && !(m.categorie||'').toLowerCase().includes(q)) return false;
+    if(van && m.datum < van) return false;
+    if(tot && m.datum > tot) return false;
+    return true;
+  });
+  renderKasRijen(data);
+}
+
+function renderKasRijen(data){
+  const tbody = document.getElementById('kasBody');
+  if(!data.length){
+    tbody.innerHTML='<tr><td colspan="8"><div class="empty"><div class="empty-icon">💰</div><div class="empty-text">Geen mutaties gevonden</div></div></td></tr>'; return;
+  }
+  const eur = v => '€'+Math.abs(+v||0).toFixed(2).replace('.',',');
+  let saldoKas=0, saldoBank=0;
+  // Bereken lopend saldo
+  const metSaldo = data.map(m=>{
+    const delta = m.type==='bij' ? +m.bedrag : -(+m.bedrag);
+    if(m.rekening==='kas')  saldoKas  = round2(saldoKas  + delta);
+    else                    saldoBank = round2(saldoBank  + delta);
+    return {...m, saldo: m.rekening==='kas' ? saldoKas : saldoBank};
+  });
+  tbody.innerHTML = metSaldo.map(m=>`<tr>
+    <td>${new Date(m.datum).toLocaleDateString('nl-NL')}</td>
+    <td>
+      <div style="font-weight:500">${m.omschrijving}</div>
+      ${m.categorie?`<div style="font-size:11px;color:var(--text3)">${m.categorie}</div>`:''}
+      ${m.bron==='bank_import'?'<span style="font-size:10px;background:rgba(59,130,246,.15);color:#60a5fa;padding:1px 5px;border-radius:4px">import</span>':''}
+    </td>
+    <td>${m.categorie||'—'}</td>
+    <td><span class="badge ${m.rekening==='kas'?'badge-geaccepteerd':'badge-verzonden'}">${m.rekening==='kas'?'💵 Kas':'🏦 Bank'}</span></td>
+    <td style="color:var(--green);font-weight:600">${m.type==='bij' ? eur(m.bedrag) : ''}</td>
+    <td style="color:var(--red);font-weight:600">${m.type==='af'  ? eur(m.bedrag) : ''}</td>
+    <td style="font-weight:700;color:${m.saldo>=0?'var(--text1)':'var(--red)'}">${(m.saldo<0?'-':'') + eur(m.saldo)}</td>
+    <td><div class="row-actions">
+      <button class="btn btn-ghost btn-sm" onclick="bewerkKasMutatie('${m.id}')">✏️</button>
+      <button class="btn btn-danger btn-sm" onclick="verwijderKasMutatie('${m.id}')">✕</button>
+    </div></td>
+  </tr>`).join('');
+}
+
+async function bewerkKasMutatie(id){
+  const m = cachedKasMutaties.find(x=>x.id===id);
+  if(!m) return;
+  _bewerkKasId = id;
+  document.getElementById('kasMutatieTitle').textContent = 'Mutatie bewerken';
+  document.getElementById('kmDatum').value        = m.datum||'';
+  document.getElementById('kmRekening').value     = m.rekening||'kas';
+  document.getElementById('kmType').value         = m.type||'bij';
+  document.getElementById('kmBedrag').value       = m.bedrag||'';
+  document.getElementById('kmOmschrijving').value = m.omschrijving||'';
+  document.getElementById('kmCategorie').value    = m.categorie||'';
+  updateKmBedragLabel();
+  openModal('modalKasMutatie');
+}
+
+async function verwijderKasMutatie(id){
+  if(!confirm('Mutatie verwijderen?')) return;
+  await dbDelete('kas_mutaties',`?id=eq.${id}`);
+  toast('Verwijderd');
+  await renderKasBank();
+}
+
+// ── BANK CSV IMPORT ──
+
+function initBankImportModal(){
+  _bankCsvData    = null;
+  _bankCsvHeaders = [];
+  window._mt940Data = null;
+  window._bankFormaat = 'csv';
+  const csvF = document.getElementById('bankCsvFile');
+  const mt940F = document.getElementById('bankMt940File');
+  if(csvF) csvF.value = '';
+  if(mt940F) mt940F.value = '';
+  document.getElementById('bankPreview').style.display   = 'none';
+  document.getElementById('mt940Preview').style.display  = 'none';
+  document.getElementById('bankImportBtn').style.display = 'none';
+  document.getElementById('bankKolomKoppelingGrid').innerHTML = '';
+  document.getElementById('bankPreviewTabel').innerHTML = '';
+  selectBankFormaat('csv');
+}
+
+function selectBankFormaat(fmt){
+  window._bankFormaat = fmt;
+  document.getElementById('bankCsvVeld').style.display   = fmt==='csv'   ? 'block':'none';
+  document.getElementById('bankMt940Veld').style.display = fmt==='mt940' ? 'block':'none';
+  document.getElementById('fmtBtnCsv').className   = fmt==='csv'   ? 'btn btn-primary btn-sm':'btn btn-sec btn-sm';
+  document.getElementById('fmtBtnMt940').className = fmt==='mt940' ? 'btn btn-primary btn-sm':'btn btn-sec btn-sm';
+  document.getElementById('bankImportBtn').style.display = 'none';
+}
+
+// ── MT940 PARSER ──
+function verwerkMt940(input){
+  const file = input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const tekst = e.target.result;
+      const transacties = parseerMt940(tekst);
+      if(!transacties.length){ toast('Geen transacties gevonden in MT940','err'); return; }
+      window._mt940Data = transacties;
+      const prev = document.getElementById('mt940Preview');
+      prev.style.display = 'block';
+      prev.innerHTML = `<b>✅ ${transacties.length} transacties gevonden</b><br><br>` +
+        transacties.slice(0,3).map(t=>
+          `${t.datum} | ${t.type==='bij'?'+':'-'}€${t.bedrag.toFixed(2)} | ${t.omschrijving.substring(0,60)}`
+        ).join('<br>') + (transacties.length>3 ? `<br>... en nog ${transacties.length-3} meer` : '');
+      document.getElementById('bankImportBtn').style.display = 'inline-flex';
+    } catch(e){ toast('MT940 verwerking mislukt: '+e.message,'err'); }
+  };
+  reader.readAsText(file, 'UTF-8');
+}
+
+function parseerMt940(tekst){
+  const transacties = [];
+  // Splits op :61: transactieblokken
+  const regels = tekst.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
+  let i = 0;
+  while(i < regels.length){
+    const regel = regels[i];
+    // :61: Valutadatum, boekdatum, D/C, bedrag, transactietype
+    if(regel.startsWith(':61:')){
+      try {
+        const inhoud = regel.substring(4);
+        // Formaat: YYMMDD[MMDD]D/C[R]bedrag[N][transactietype][referentie]
+        const match = inhoud.match(/^(\d{6})(\d{4})?(C|D|RD|RC)(\d+[,]\d{2})(.*)/);
+        if(match){
+          const datumStr = match[1]; // YYMMDD
+          const jaar = +datumStr.substring(0,2) + 2000;
+          const maand= datumStr.substring(2,4);
+          const dag  = datumStr.substring(4,6);
+          const datum= `${jaar}-${maand}-${dag}`;
+          const dc   = match[3]; // C=credit(bij), D=debet(af)
+          const type = (dc==='C'||dc==='RC') ? 'bij' : 'af';
+          const bedrag = +match[4].replace(',','.');
+
+          // Omschrijving uit :86: tag (volgende regel(s))
+          let omschrijving = '';
+          let tegenrekening = '';
+          let j = i+1;
+          // Sla :62: (eindsaldo) over, lees :86:
+          while(j < regels.length && !regels[j].startsWith(':61:') && !regels[j].startsWith(':62:')){
+            if(regels[j].startsWith(':86:')){
+              const r86 = regels[j].substring(4);
+              // Haal SEPA velden eruit
+              omschrijving   = haalMt940Veld(r86, ['020','021','022','023','024','025','026','027','028','029']) || r86.replace(/\?\d{2}/g,' ').trim();
+              tegenrekening  = haalMt940Veld(r86, ['031','030']) || '';
+            }
+            j++;
+          }
+          transacties.push({datum, type, bedrag, omschrijving: omschrijving||'MT940 transactie', tegenrekening});
+          i = j;
+          continue;
+        }
+      } catch(e){ /* skip */ }
+    }
+    i++;
+  }
+  return transacties;
+}
+
+function haalMt940Veld(tekst, codes){
+  for(const code of codes){
+    const re = new RegExp(`\\?${code}([^?]*)`, 'i');
+    const m  = tekst.match(re);
+    if(m && m[1].trim()) return m[1].trim();
+  }
+  return '';
+}
+
+async function importeerBankBestand(){
+  if(window._bankFormaat === 'mt940') return importeerMt940();
+  return importeerBankCsv();
+}
+
+async function importeerMt940(){
+  const data = window._mt940Data;
+  if(!data?.length){ toast('Geen MT940 data','err'); return; }
+  const bank = document.getElementById('bankNaam').value||'MT940';
+  toast(`${data.length} transacties importeren...`);
+  for(const t of data){
+    await dbInsert('kas_mutaties',{
+      bedrijf_id:   huidigeBedrijfId,
+      datum:        t.datum,
+      type:         t.type,
+      rekening:     'bank',
+      bedrag:       round2(t.bedrag),
+      omschrijving: t.omschrijving.substring(0,200),
+      tegenrekening:t.tegenrekening||null,
+      categorie:    null,
+      bron:         'bank_import',
+      bank_naam:    bank,
+    });
+  }
+  closeModal('modalBankImport');
+  toast(`✅ ${data.length} MT940 transacties geïmporteerd`);
+  await renderKasBank();
+  kbToonTab('bank');
+}
+
+function verwerkBankCsv(input){
+  const file = input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const tekst = e.target.result;
+    // Detecteer separator
+    const sep = tekst.includes(';') ? ';' : ',';
+    const regels = tekst.split('\n').filter(r=>r.trim());
+    if(regels.length < 2){ toast('Geen data gevonden in CSV','err'); return; }
+
+    // Auto-detect op basis van geselecteerde bank
+    const bank = document.getElementById('bankNaam').value;
+    const headers = regels[0].split(sep).map(h=>h.replace(/"/g,'').trim());
+    _bankCsvHeaders = headers;
+
+    // Parse alle rijen
+    _bankCsvData = regels.slice(1).map(r=>{
+      const cols = r.split(sep).map(c=>c.replace(/"/g,'').trim());
+      const obj = {};
+      headers.forEach((h,i)=>obj[h]=cols[i]||'');
+      return obj;
+    }).filter(r=>Object.values(r).some(v=>v));
+
+    // Toon kolom koppeling
+    const voorinvulling = getVoorInvulling(bank, headers);
+    document.getElementById('bankPreview').style.display = 'block';
+    document.getElementById('bankImportBtn').style.display = 'inline-flex';
+
+    const opties = headers.map(h=>`<option value="${h}">${h}</option>`).join('');
+    const velden = [
+      {id:'mapDatum',         label:'Datum'},
+      {id:'mapOmschrijving',  label:'Omschrijving'},
+      {id:'mapTegenrekening', label:'Tegenrekening (optioneel)'},
+      {id:'mapBedrag',        label:'Bedrag (bij negatief = af)'},
+      {id:'mapBedragType',    label:'Of apart "Bij/Af" kolom (optioneel)'},
+    ];
+    document.getElementById('bankKolomKoppelingGrid').innerHTML = velden.map(v=>`
+      <div class="form-group">
+        <label>${v.label}</label>
+        <select id="${v.id}">
+          <option value="">— Niet gebruiken —</option>
+          ${opties}
+        </select>
+      </div>`).join('');
+
+    // Voorinvullen
+    Object.entries(voorinvulling).forEach(([id,val])=>{
+      const el = document.getElementById(id);
+      if(el && headers.includes(val)) el.value = val;
+    });
+
+    // Preview eerste 3 rijen
+    const preview = _bankCsvData.slice(0,3).map(r=>
+      Object.entries(r).slice(0,5).map(([k,v])=>`<b>${k}:</b> ${v}`).join(' | ')
+    ).join('<br>');
+    document.getElementById('bankPreviewTabel').innerHTML = `<b>Voorbeeld eerste rijen:</b><br>${preview}`;
+  };
+  reader.readAsText(file, 'UTF-8');
+}
+
+function getVoorInvulling(bank, headers){
+  const h = headers.map(x=>x.toLowerCase());
+  if(bank==='ing') return {
+    mapDatum: headers[h.indexOf('datum')]||'',
+    mapOmschrijving: headers[h.indexOf('naam / omschrijving')]||headers[h.indexOf('omschrijving')]||'',
+    mapTegenrekening: headers[h.indexOf('tegenrekening iban/bban')]||'',
+    mapBedrag: headers[h.indexOf('bedrag (eur)')]||'',
+    mapBedragType: headers[h.indexOf('af bij')]||'',
+  };
+  if(bank==='rabo') return {
+    mapDatum: headers[h.indexOf('datum')]||'',
+    mapOmschrijving: headers[h.indexOf('omschrijving-1')]||headers[h.indexOf('omschrijving')]||'',
+    mapTegenrekening: headers[h.indexOf('naam tegenpartij')]||'',
+    mapBedrag: headers[h.indexOf('bedrag')]||'',
+  };
+  if(bank==='abn') return {
+    mapDatum: headers[h.indexOf('transactiedatum')]||'',
+    mapOmschrijving: headers[h.indexOf('omschrijving')]||'',
+    mapTegenrekening: headers[h.indexOf('tegenrekeningnummer')]||'',
+    mapBedrag: headers[h.indexOf('bedrag')]||'',
+  };
+  // Slim raden op basis van kolomnamen
+  return {
+    mapDatum:         headers.find(h=>/datum|date/i.test(h))||'',
+    mapOmschrijving:  headers.find(h=>/omschrijving|beschrijving|description|naam/i.test(h))||'',
+    mapTegenrekening: headers.find(h=>/tegen|contra|partij/i.test(h))||'',
+    mapBedrag:        headers.find(h=>/bedrag|amount|saldo/i.test(h))||'',
+    mapBedragType:    headers.find(h=>/af.bij|type|debet|credit/i.test(h))||'',
+  };
+}
+
+async function importeerBankCsv(){
+  if(!_bankCsvData?.length){ toast('Geen data','err'); return; }
+  const mapDatum        = document.getElementById('mapDatum').value;
+  const mapOmschrijving = document.getElementById('mapOmschrijving').value;
+  const mapTegenrek     = document.getElementById('mapTegenrekening').value;
+  const mapBedrag       = document.getElementById('mapBedrag').value;
+  const mapBedragType   = document.getElementById('mapBedragType').value;
+
+  if(!mapDatum||!mapBedrag){ toast('Koppel minimaal datum en bedrag','err'); return; }
+
+  const bank    = document.getElementById('bankNaam').value||'bank';
+  const mutaties= [];
+
+  for(const rij of _bankCsvData){
+    const datum = parseerDatum(rij[mapDatum]);
+    if(!datum) continue;
+    const omschrijving = rij[mapOmschrijving]||'Bank transactie';
+    const tegenrek     = mapTegenrek ? rij[mapTegenrek]||'' : '';
+    let bedragRaw      = (rij[mapBedrag]||'0').replace(',','.').replace(/[^\d.-]/g,'');
+    let bedrag         = +bedragRaw||0;
+    let type           = bedrag >= 0 ? 'bij' : 'af';
+    bedrag             = Math.abs(bedrag);
+
+    // Als er een aparte bij/af kolom is
+    if(mapBedragType && rij[mapBedragType]){
+      const bt = rij[mapBedragType].toLowerCase();
+      type = (bt.includes('af')||bt.includes('deb')||bt.includes('d')) ? 'af' : 'bij';
+    }
+    if(!bedrag) continue;
+
+    mutaties.push({
+      bedrijf_id:    huidigeBedrijfId,
+      datum, type, rekening: 'bank',
+      bedrag:        round2(bedrag),
+      omschrijving:  omschrijving.substring(0,200),
+      tegenrekening: tegenrek||null,
+      categorie:     null,
+      bron:          'bank_import',
+      bank_naam:     bank,
+    });
+  }
+
+  if(!mutaties.length){ toast('Geen geldige transacties gevonden','err'); return; }
+
+  toast(`${mutaties.length} transacties importeren...`);
+  // Batch insert
+  for(const m of mutaties) await dbInsert('kas_mutaties', m);
+
+  closeModal('modalBankImport');
+  toast(`✅ ${mutaties.length} transacties geïmporteerd`);
+  await renderKasBank();
+  kbToonTab('bank');
+}
+
+function parseerDatum(str){
+  if(!str) return null;
+  // Formaten: YYYY-MM-DD, DD-MM-YYYY, YYYYMMDD, DD/MM/YYYY
+  str = str.trim();
+  if(/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+  if(/^\d{8}$/.test(str)) return `${str.slice(0,4)}-${str.slice(4,6)}-${str.slice(6,8)}`;
+  if(/^\d{2}[-/]\d{2}[-/]\d{4}$/.test(str)){
+    const [d,m,y] = str.split(/[-/]/);
+    return `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
+  }
+  return null;
+}
+
+async function renderBankAfschriften(){
+  const el = document.getElementById('bankAfschriftenLijst');
+  // Tel per bank_naam hoeveel transacties er zijn
+  const bankData = cachedKasMutaties.filter(m=>m.bron==='bank_import');
+  if(!bankData.length){
+    el.innerHTML='<div style="color:var(--text3);font-size:13px">Nog geen bankafschriften geïmporteerd.</div>';
+    document.getElementById('bankBody').innerHTML='<tr><td colspan="6"><div class="empty"><div class="empty-icon">🏦</div><div class="empty-text">Importeer een bankafschrift</div></div></td></tr>';
+    return;
+  }
+  // Groepeer per bank
+  const banken = {};
+  bankData.forEach(m=>{ const b=m.bank_naam||'bank'; if(!banken[b]) banken[b]={count:0,totaal:0}; banken[b].count++; banken[b].totaal+=m.type==='bij'?+m.bedrag:-m.bedrag; });
+  el.innerHTML = Object.entries(banken).map(([naam,info])=>`
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px;background:var(--bg3);border-radius:8px;margin-bottom:6px">
+      <div><span style="font-weight:600">🏦 ${naam}</span> <span style="color:var(--text3);font-size:12px">${info.count} transacties</span></div>
+      <span style="font-weight:700;color:${info.totaal>=0?'var(--green)':'var(--red)'}">${info.totaal>=0?'+':'-'}€${Math.abs(info.totaal).toFixed(2).replace('.',',')}</span>
+    </div>`).join('');
+
+  // Toon bankregels in tabel
+  const eur = v => '€'+Math.abs(+v||0).toFixed(2).replace('.',',');
+  document.getElementById('bankBody').innerHTML = bankData.map(m=>`<tr>
+    <td>${new Date(m.datum).toLocaleDateString('nl-NL')}</td>
+    <td>${m.omschrijving}</td>
+    <td style="color:var(--text3);font-size:12px">${m.tegenrekening||'—'}</td>
+    <td style="color:var(--green);font-weight:600">${m.type==='bij'?eur(m.bedrag):''}</td>
+    <td style="color:var(--red);font-weight:600">${m.type==='af'?eur(m.bedrag):''}</td>
+    <td>—</td>
+  </tr>`).join('');
+}
+
+// ══════════════════════════════════════════════════════════
+//  RESULTATENREKENING
+// ══════════════════════════════════════════════════════════
+
+function initResultaten(){
+  const jaar = new Date().getFullYear();
+  // Jaarselector vullen
+  const sel = document.getElementById('resJaar');
+  sel.innerHTML = '';
+  for(let j=jaar; j>=jaar-4; j--){
+    const o=document.createElement('option'); o.value=j; o.textContent=j;
+    sel.appendChild(o);
+  }
+  sel.value = jaar;
+  document.getElementById('resVan').value = `${jaar}-01-01`;
+  document.getElementById('resTot').value = `${jaar}-12-31`;
+  renderResultaten();
+}
+
+function setResultatenJaar(){
+  const jaar = document.getElementById('resJaar').value;
+  document.getElementById('resVan').value = `${jaar}-01-01`;
+  document.getElementById('resTot').value = `${jaar}-12-31`;
+  renderResultaten();
+}
+
+async function renderResultaten(){
+  if(!huidigeBedrijfId) return;
+  const van = document.getElementById('resVan').value;
+  const tot = document.getElementById('resTot').value;
+  if(!van||!tot) return;
+
+  const [facturen, inkopen, mutaties] = await Promise.all([
+    dbGet('facturen', `?select=*&bedrijf_id=eq.${huidigeBedrijfId}&datum=gte.${van}&datum=lte.${tot}`)||[],
+    dbGet('inkopen',  `?select=*&bedrijf_id=eq.${huidigeBedrijfId}&datum=gte.${van}&datum=lte.${tot}`)||[],
+    dbGet('kas_mutaties',`?select=*&bedrijf_id=eq.${huidigeBedrijfId}&datum=gte.${van}&datum=lte.${tot}`)||[],
+  ]);
+
+  const f = facturen||[], ink = inkopen||[], mut = mutaties||[];
+  const eur  = v => '€'+Math.abs(+v||0).toFixed(2).replace('.',',');
+  const eur2 = v => (v<0?'-':'')+'€'+Math.abs(+v||0).toFixed(2).replace('.',',');
+
+  // ── BATEN ──
+  const omzetExcl    = round2(f.filter(x=>x.factuur_type!=='credit').reduce((a,x)=>a+(+x.tot_excl||0),0));
+  const creditExcl   = round2(f.filter(x=>x.factuur_type==='credit').reduce((a,x)=>a+Math.abs(+x.tot_excl||0),0));
+  const nettoOmzet   = round2(omzetExcl - creditExcl);
+  const kasInkomsten = round2(mut.filter(m=>m.type==='bij'&&m.rekening==='kas').reduce((a,m)=>a+(+m.bedrag||0),0));
+  const bankInkomsten= round2(mut.filter(m=>m.type==='bij'&&m.rekening==='bank'&&m.bron==='handmatig').reduce((a,m)=>a+(+m.bedrag||0),0));
+  const totaalBaten  = round2(nettoOmzet + kasInkomsten + bankInkomsten);
+
+  // ── LASTEN ──
+  const inkoopKosten = round2(ink.reduce((a,x)=>a+(+x.excl_btw||0),0));
+
+  // Kas uitgaven per categorie
+  const kasUitgaven = mut.filter(m=>m.type==='af');
+  const perCat = {};
+  kasUitgaven.forEach(m=>{
+    const cat = m.categorie||'Overig';
+    perCat[cat] = round2((perCat[cat]||0) + (+m.bedrag||0));
+  });
+  const totaalKasUit = round2(Object.values(perCat).reduce((a,v)=>a+v,0));
+  const totaalLasten = round2(inkoopKosten + totaalKasUit);
+
+  // ── NETTO ──
+  const netto = round2(totaalBaten - totaalLasten);
+
+  // ── BTW ──
+  const btwOntvangen = round2(f.filter(x=>x.factuur_type!=='credit').reduce((a,x)=>a+(+x.tot_btw||0),0));
+  const btwCredit    = round2(f.filter(x=>x.factuur_type==='credit').reduce((a,x)=>a+Math.abs(+x.tot_btw||0),0));
+  const btwInkoop    = round2(ink.reduce((a,x)=>a+(+x.btw_bedrag||0),0));
+  const btwNetto     = round2(btwOntvangen - btwCredit - btwInkoop);
+
+  // ── RENDER ──
+
+  // Winst kaart
+  const nettoEl = document.getElementById('resNetto');
+  nettoEl.textContent = eur2(netto);
+  nettoEl.style.color = netto>=0 ? 'var(--green)' : 'var(--red)';
+  document.getElementById('resNettoLabel').textContent = netto>=0 ? '✅ Winst' : '⚠️ Verlies';
+  document.getElementById('resWinstKaart').style.borderColor = netto>=0 ? 'var(--green)' : 'var(--red)';
+
+  // Baten rijen
+  const batenRijen = [
+    {label:'Omzet (excl. BTW)',    bedrag: omzetExcl,     kleur:'var(--green)'},
+    {label:'Creditnota\'s',        bedrag:-creditExcl,    kleur: creditExcl?'var(--red)':'var(--text3)'},
+    {label:'Kas inkomsten',        bedrag: kasInkomsten,  kleur:'var(--green)'},
+    {label:'Bank inkomsten',       bedrag: bankInkomsten, kleur:'var(--green)'},
+  ].filter(r=>r.bedrag!==0);
+
+  document.getElementById('resTotaalBaten').textContent = eur(totaalBaten);
+  document.getElementById('resBatenRijen').innerHTML = batenRijen.map(r=>`
+    <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border)">
+      <span style="font-size:13px;color:var(--text2)">${r.label}</span>
+      <span style="font-weight:600;color:${r.kleur}">${eur2(r.bedrag)}</span>
+    </div>`).join('') + `
+    <div style="display:flex;justify-content:space-between;padding:8px 0;margin-top:4px">
+      <span style="font-size:13px;font-weight:700;color:var(--text1)">Totaal baten</span>
+      <span style="font-weight:800;color:var(--green)">${eur(totaalBaten)}</span>
+    </div>`;
+
+  // Lasten rijen
+  const lastenRijen = [
+    {label:'Inkoopkosten (excl. BTW)', bedrag: inkoopKosten},
+    ...Object.entries(perCat).map(([cat,v])=>({label:cat, bedrag:v})),
+  ].filter(r=>r.bedrag>0);
+
+  document.getElementById('resTotaalLasten').textContent = eur(totaalLasten);
+  document.getElementById('resLastenRijen').innerHTML = lastenRijen.map(r=>`
+    <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border)">
+      <span style="font-size:13px;color:var(--text2)">${r.label}</span>
+      <span style="font-weight:600;color:var(--red)">${eur(r.bedrag)}</span>
+    </div>`).join('') + `
+    <div style="display:flex;justify-content:space-between;padding:8px 0;margin-top:4px">
+      <span style="font-size:13px;font-weight:700;color:var(--text1)">Totaal lasten</span>
+      <span style="font-weight:800;color:var(--red)">${eur(totaalLasten)}</span>
+    </div>`;
+
+  // BTW samenvatting
+  document.getElementById('resBtwSamenvatting').innerHTML = [
+    {label:'BTW ontvangen',          bedrag:btwOntvangen, kleur:'var(--green)'},
+    {label:'BTW creditnota\'s',      bedrag:btwCredit,    kleur:'var(--red)'},
+    {label:'BTW inkopen (aftrekbaar)',bedrag:btwInkoop,   kleur:'var(--blue)'},
+    {label: btwNetto>=0?'Af te dragen':'Terug te vorderen', bedrag:Math.abs(btwNetto), kleur:btwNetto>=0?'var(--accent)':'var(--green)', vet:true},
+  ].map(r=>`
+    <div style="background:var(--bg3);border-radius:10px;padding:12px;text-align:center">
+      <div style="font-size:11px;color:var(--text3);margin-bottom:4px">${r.label}</div>
+      <div style="font-size:18px;font-weight:${r.vet?'800':'700'};color:${r.kleur}">€${(+r.bedrag||0).toFixed(2).replace('.',',')}</div>
+    </div>`).join('');
+
+  // Grafiek omzet per maand (SVG staafdiagram)
+  const maanden = ['Jan','Feb','Mrt','Apr','Mei','Jun','Jul','Aug','Sep','Okt','Nov','Dec'];
+  const omzetPerMaand = new Array(12).fill(0);
+  const kostenPerMaand = new Array(12).fill(0);
+  f.filter(x=>x.factuur_type!=='credit').forEach(x=>{
+    const m = new Date(x.datum).getMonth();
+    omzetPerMaand[m] = round2(omzetPerMaand[m] + (+x.tot_excl||0));
+  });
+  ink.forEach(x=>{
+    const m = new Date(x.datum).getMonth();
+    kostenPerMaand[m] = round2(kostenPerMaand[m] + (+x.excl_btw||0));
+  });
+
+  const maxWaarde = Math.max(...omzetPerMaand, ...kostenPerMaand, 1);
+  const breedte = 680, hoogte = 180, marge = 40, breedte_balk = 20, afstand = (breedte-marge*2)/12;
+
+  const balken = maanden.map((naam,i)=>{
+    const x    = marge + i*afstand + afstand/2;
+    const hO   = (omzetPerMaand[i]/maxWaarde)*(hoogte-30);
+    const hK   = (kostenPerMaand[i]/maxWaarde)*(hoogte-30);
+    return `
+      <rect x="${x-breedte_balk-2}" y="${hoogte-30-hO}" width="${breedte_balk}" height="${Math.max(hO,1)}" fill="var(--green)" opacity="0.8" rx="2"/>
+      <rect x="${x+2}" y="${hoogte-30-hK}" width="${breedte_balk}" height="${Math.max(hK,1)}" fill="var(--red)" opacity="0.6" rx="2"/>
+      <text x="${x}" y="${hoogte-14}" text-anchor="middle" font-size="9" fill="var(--text3)">${naam}</text>`;
+  }).join('');
+
+  document.getElementById('resGrafiek').innerHTML = `
+    <div style="display:flex;gap:14px;margin-bottom:8px;font-size:12px">
+      <span><span style="display:inline-block;width:10px;height:10px;background:var(--green);border-radius:2px;margin-right:4px"></span>Omzet excl. BTW</span>
+      <span><span style="display:inline-block;width:10px;height:10px;background:var(--red);border-radius:2px;margin-right:4px"></span>Inkoopkosten</span>
+    </div>
+    <svg viewBox="0 0 ${breedte} ${hoogte}" style="width:100%;height:auto;overflow:visible">
+      <line x1="${marge}" y1="${hoogte-30}" x2="${breedte-marge}" y2="${hoogte-30}" stroke="var(--border)" stroke-width="1"/>
+      ${balken}
+    </svg>`;
+}
+
+// ── DASHBOARD RESULTATEN WIDGET ──
+async function renderDashboardResultaten(){
+  if(!huidigeBedrijfId) return;
+  const jaar = new Date().getFullYear();
+  const van  = `${jaar}-01-01`;
+  const tot  = new Date().toISOString().split('T')[0];
+
+  const [facturen, inkopen, mutaties] = await Promise.all([
+    dbGet('facturen', `?select=tot_excl,factuur_type&bedrijf_id=eq.${huidigeBedrijfId}&datum=gte.${van}&datum=lte.${tot}`)||[],
+    dbGet('inkopen',  `?select=excl_btw&bedrijf_id=eq.${huidigeBedrijfId}&datum=gte.${van}&datum=lte.${tot}`)||[],
+    dbGet('kas_mutaties',`?select=bedrag,type&bedrijf_id=eq.${huidigeBedrijfId}&datum=gte.${van}&datum=lte.${tot}&type=eq.af`)||[],
+  ]);
+
+  const omzet  = round2((facturen||[]).filter(f=>f.factuur_type!=='credit').reduce((a,f)=>a+(+f.tot_excl||0),0));
+  const kosten = round2((inkopen||[]).reduce((a,i)=>a+(+i.excl_btw||0),0) + (mutaties||[]).reduce((a,m)=>a+(+m.bedrag||0),0));
+  const netto  = round2(omzet - kosten);
+  const eur    = v => '€'+Math.abs(+v||0).toFixed(2).replace('.',',');
+
+  const el = document.getElementById('dashResultaten');
+  if(!el) return;
+  el.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:10px">
+      <div style="background:var(--bg3);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:10px;color:var(--text3);margin-bottom:3px">Omzet (YTD)</div>
+        <div style="font-size:16px;font-weight:800;color:var(--green)">${eur(omzet)}</div>
+      </div>
+      <div style="background:var(--bg3);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:10px;color:var(--text3);margin-bottom:3px">Kosten (YTD)</div>
+        <div style="font-size:16px;font-weight:800;color:var(--red)">${eur(kosten)}</div>
+      </div>
+      <div style="background:var(--bg3);border-radius:10px;padding:12px;text-align:center;border:1.5px solid ${netto>=0?'var(--green)':'var(--red)'}">
+        <div style="font-size:10px;color:var(--text3);margin-bottom:3px">${netto>=0?'Winst':'Verlies'}</div>
+        <div style="font-size:16px;font-weight:800;color:${netto>=0?'var(--green)':'var(--red)'}">${(netto<0?'-':'')+eur(netto)}</div>
+      </div>
+    </div>
+    <button class="btn btn-ghost btn-sm" onclick="showTab('resultaten')" style="width:100%">📈 Volledige resultatenrekening →</button>`;
+}
+
+// ══════════════════════════════════════════════════════════
+//  URENREGISTRATIE
+// ══════════════════════════════════════════════════════════
+
+let cachedUren      = [];
+let cachedProjecten = [];
+let _bewerkUrenId   = null;
+let _bewerkProjectId= null;
+let _globalTarief   = 75;
+
+function urenToonTab(tab){
+  ['uren','projecten','overzicht'].forEach(t=>{
+    document.getElementById(`urenPanel${t.charAt(0).toUpperCase()+t.slice(1)}`).style.display = t===tab?'block':'none';
+    document.getElementById(`urenTab${t.charAt(0).toUpperCase()+t.slice(1)}`).className = t===tab?'btn btn-primary btn-sm':'btn btn-sec btn-sm';
+  });
+  if(tab==='overzicht') renderUrenOverzicht();
+  if(tab==='projecten') renderProjecten();
+}
+
+// ── UREN MODAL ──
+function initUrenModal(uren=null){
+  _bewerkUrenId = uren?.id||null;
+  document.getElementById('urenModalTitel').textContent = uren?'Uren bewerken':'Uren invoeren';
+  document.getElementById('uDatum').value        = uren?.datum || new Date().toISOString().split('T')[0];
+  document.getElementById('uOmschrijving').value = uren?.omschrijving||'';
+  document.getElementById('uUren').value         = uren?.uren||'';
+  document.getElementById('uTarief').value       = uren?.tarief||_globalTarief||75;
+  document.getElementById('uBtw').value          = uren?.btw_perc||21;
+  document.getElementById('uTotaal').value       = '';
+
+  // Klanten laden
+  const kSel = document.getElementById('uKlant');
+  kSel.innerHTML = '<option value="">— Selecteer klant —</option>';
+  (cachedKlanten||[]).forEach(k=>{
+    const o=document.createElement('option'); o.value=k.id; o.textContent=k.naam;
+    if(uren?.klant_id===k.id) o.selected=true;
+    kSel.appendChild(o);
+  });
+  laadUrenProjecten(uren?.project_id);
+  berekenUrenBedrag();
+}
+
+function laadUrenProjecten(selectProjectId=null){
+  const klantId = document.getElementById('uKlant').value;
+  const pSel    = document.getElementById('uProject');
+  pSel.innerHTML = '<option value="">— Geen project —</option>';
+  const projecten = cachedProjecten.filter(p=>!klantId || p.klant_id===klantId);
+  projecten.forEach(p=>{
+    const o=document.createElement('option'); o.value=p.id; o.textContent=p.naam;
+    if(selectProjectId===p.id) o.selected=true;
+    pSel.appendChild(o);
+  });
+  laadUrenTarief();
+}
+
+function laadUrenTarief(){
+  const projId  = document.getElementById('uProject').value;
+  const klantId = document.getElementById('uKlant').value;
+  const proj    = cachedProjecten.find(p=>p.id===projId);
+  if(proj?.tarief){ document.getElementById('uTarief').value = proj.tarief; }
+  berekenUrenBedrag();
+}
+
+function berekenUrenBedrag(){
+  const uren   = +document.getElementById('uUren').value||0;
+  const tarief = +document.getElementById('uTarief').value||0;
+  const btwP   = +document.getElementById('uBtw').value||0;
+  const excl   = round2(uren*tarief);
+  const incl   = round2(excl*(1+btwP/100));
+  document.getElementById('uTotaal').value = excl>0 ? `€${excl.toFixed(2)} excl. / €${incl.toFixed(2)} incl.` : '';
+}
+
+async function slaUrenOp(){
+  const datum        = document.getElementById('uDatum').value;
+  const klantId      = document.getElementById('uKlant').value;
+  const projectId    = document.getElementById('uProject').value;
+  const omschrijving = document.getElementById('uOmschrijving').value.trim();
+  const uren         = +document.getElementById('uUren').value||0;
+  const tarief       = +document.getElementById('uTarief').value||0;
+  const btwPerc      = +document.getElementById('uBtw').value||0;
+
+  if(!datum)        return toast('Vul een datum in','err');
+  if(!klantId)      return toast('Selecteer een klant','err');
+  if(!omschrijving) return toast('Vul een omschrijving in','err');
+  if(!uren)         return toast('Vul het aantal uren in','err');
+  if(!tarief)       return toast('Vul een uurtarief in','err');
+
+  const klant    = (cachedKlanten||[]).find(k=>k.id===klantId);
+  const exclTot  = round2(uren*tarief);
+  const btwTot   = round2(exclTot*btwPerc/100);
+  const inclTot  = round2(exclTot+btwTot);
+
+  const body = {
+    bedrijf_id:   huidigeBedrijfId,
+    datum, klant_id: klantId||null,
+    klant_naam:   klant?.naam||'',
+    project_id:   projectId||null,
+    omschrijving, uren, tarief,
+    btw_perc:     btwPerc,
+    excl_tot:     exclTot,
+    btw_tot:      btwTot,
+    incl_tot:     inclTot,
+    status:       'open',
+  };
+
+  try {
+    if(_bewerkUrenId){
+      await dbUpdate('uren_registratie',`?id=eq.${_bewerkUrenId}`, body);
+      toast('✅ Uren bijgewerkt');
+    } else {
+      await dbInsert('uren_registratie', body);
+      toast('✅ Uren opgeslagen');
+    }
+    closeModal('modalUren');
+    await renderUren();
+  } catch(e){ toast('Fout: '+e.message,'err'); }
+}
+
+// ── PROJECT MODAL ──
+function initProjectModal(project=null){
+  _bewerkProjectId = project?.id||null;
+  document.getElementById('projectModalTitel').textContent = project?'Project bewerken':'Project aanmaken';
+  document.getElementById('pNaam').value        = project?.naam||'';
+  document.getElementById('pTarief').value      = project?.tarief||_globalTarief||75;
+  document.getElementById('pBudget').value      = project?.budget_uren||'';
+  document.getElementById('pOmschrijving').value= project?.omschrijving||'';
+  document.getElementById('pStatus').value      = project?.status||'actief';
+
+  const kSel = document.getElementById('pKlant');
+  kSel.innerHTML = '<option value="">— Selecteer klant —</option>';
+  (cachedKlanten||[]).forEach(k=>{
+    const o=document.createElement('option'); o.value=k.id; o.textContent=k.naam;
+    if(project?.klant_id===k.id) o.selected=true;
+    kSel.appendChild(o);
+  });
+}
+
+async function slaProjectOp(){
+  const naam    = document.getElementById('pNaam').value.trim();
+  const klantId = document.getElementById('pKlant').value;
+  const tarief  = +document.getElementById('pTarief').value||0;
+  const budget  = +document.getElementById('pBudget').value||null;
+  const omschr  = document.getElementById('pOmschrijving').value.trim();
+  const status  = document.getElementById('pStatus').value;
+
+  if(!naam)    return toast('Vul een projectnaam in','err');
+  if(!klantId) return toast('Selecteer een klant','err');
+
+  const klant = (cachedKlanten||[]).find(k=>k.id===klantId);
+  const body  = {
+    bedrijf_id: huidigeBedrijfId,
+    naam, klant_id: klantId,
+    klant_naam: klant?.naam||'',
+    tarief, budget_uren: budget||null,
+    omschrijving: omschr||null,
+    status,
+  };
+
+  try {
+    if(_bewerkProjectId){
+      await dbUpdate('projecten',`?id=eq.${_bewerkProjectId}`, body);
+      toast('✅ Project bijgewerkt');
+    } else {
+      await dbInsert('projecten', body);
+      toast('✅ Project aangemaakt');
+    }
+    closeModal('modalProject');
+    await renderUren();
+  } catch(e){ toast('Fout: '+e.message,'err'); }
+}
+
+// ── RENDER UREN ──
+async function renderUren(){
+  if(!huidigeBedrijfId) return;
+  [cachedUren, cachedProjecten] = await Promise.all([
+    dbGet('uren_registratie',`?select=*&bedrijf_id=eq.${huidigeBedrijfId}&order=datum.desc`)||[],
+    dbGet('projecten',`?select=*&bedrijf_id=eq.${huidigeBedrijfId}&order=naam.asc`)||[],
+  ]);
+
+  // Stats
+  const nu        = new Date();
+  const weekStart = new Date(nu); weekStart.setDate(nu.getDate()-nu.getDay()+1); weekStart.setHours(0,0,0,0);
+  const maandStart= new Date(nu.getFullYear(),nu.getMonth(),1);
+  const dezeWeek  = (cachedUren||[]).filter(u=>new Date(u.datum)>=weekStart).reduce((a,u)=>a+(+u.uren||0),0);
+  const dezeMaand = (cachedUren||[]).filter(u=>new Date(u.datum)>=maandStart).reduce((a,u)=>a+(+u.uren||0),0);
+  const openUren  = (cachedUren||[]).filter(u=>u.status==='open');
+  const openBedrag= openUren.reduce((a,u)=>a+(+u.excl_tot||0),0);
+  const openAantal= openUren.reduce((a,u)=>a+(+u.uren||0),0);
+
+  document.getElementById('urenDezeWeek').textContent  = dezeWeek.toFixed(1)+'u';
+  document.getElementById('urenDezeMaand').textContent = dezeMaand.toFixed(1)+'u';
+  document.getElementById('urenNietGefact').innerHTML  = `<small>€</small>${openBedrag.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,'.')}`;
+  document.getElementById('urenOpenstaand').textContent= openAantal.toFixed(1)+'u';
+
+  // Filter dropdowns bijwerken
+  const kSel = document.getElementById('filterUrenKlant');
+  const huidigeK = kSel.value;
+  kSel.innerHTML = '<option value="">Alle klanten</option>';
+  [...new Set((cachedUren||[]).map(u=>u.klant_naam).filter(Boolean))].forEach(n=>{
+    const o=document.createElement('option'); o.value=n; o.textContent=n; kSel.appendChild(o);
+  });
+  kSel.value = huidigeK;
+
+  const pSel = document.getElementById('filterUrenProject');
+  pSel.innerHTML = '<option value="">Alle projecten</option>';
+  (cachedProjecten||[]).forEach(p=>{
+    const o=document.createElement('option'); o.value=p.id; o.textContent=p.naam; pSel.appendChild(o);
+  });
+
+  filterUren();
+}
+
+function filterUren(){
+  const klant   = document.getElementById('filterUrenKlant')?.value||'';
+  const project = document.getElementById('filterUrenProject')?.value||'';
+  const status  = document.getElementById('filterUrenStatus')?.value||'';
+  const van     = document.getElementById('urenVan')?.value||'';
+  const tot     = document.getElementById('urenTot')?.value||'';
+
+  const data = (cachedUren||[]).filter(u=>{
+    if(klant   && u.klant_naam!==klant) return false;
+    if(project && u.project_id!==project) return false;
+    if(status==='open' && u.status!=='open') return false;
+    if(status==='gefactureerd' && u.status!=='gefactureerd') return false;
+    if(van && u.datum<van) return false;
+    if(tot && u.datum>tot) return false;
+    return true;
+  });
+  renderUrenRijen(data);
+}
+
+function renderUrenRijen(data){
+  const tbody = document.getElementById('urenBody');
+  if(!data.length){
+    tbody.innerHTML='<tr><td colspan="9"><div class="empty"><div class="empty-icon">⏱️</div><div class="empty-text">Geen uren gevonden</div></div></td></tr>';
+    document.getElementById('urenSelectieActies').style.display='none'; return;
+  }
+  const eur = v=>'€'+((+v||0).toFixed(2).replace('.',','));
+  const proj = id => (cachedProjecten||[]).find(p=>p.id===id);
+  tbody.innerHTML = data.map(u=>`<tr>
+    <td>${new Date(u.datum).toLocaleDateString('nl-NL')}</td>
+    <td>${u.klant_naam||'—'}</td>
+    <td>${proj(u.project_id)?.naam||'—'}</td>
+    <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${u.omschrijving}">${u.omschrijving}</td>
+    <td style="font-weight:600">${(+u.uren||0).toFixed(2)}u</td>
+    <td style="color:var(--text3)">€${(+u.tarief||0).toFixed(2)}/u</td>
+    <td style="font-weight:700;color:var(--accent)">${eur(u.excl_tot)}</td>
+    <td><span class="badge ${u.status==='gefactureerd'?'badge-geaccepteerd':'badge-verzonden'}">${u.status==='gefactureerd'?'Gefactureerd':'Open'}</span></td>
+    <td><div class="row-actions">
+      ${u.status==='open'?`<input type="checkbox" class="urenCheck" data-id="${u.id}" data-klant="${u.klant_naam}" onchange="updateUrenSelectie()" title="Selecteer voor facturatie">`:''}
+      <button class="btn btn-ghost btn-sm" onclick="bewerkUren('${u.id}')">✏️</button>
+      <button class="btn btn-danger btn-sm" onclick="verwijderUren('${u.id}')">✕</button>
+    </div></td>
+  </tr>`).join('');
+
+  updateUrenSelectie();
+}
+
+function updateUrenSelectie(){
+  const checks = document.querySelectorAll('.urenCheck:checked');
+  const acties = document.getElementById('urenSelectieActies');
+  acties.style.display = checks.length>0 ? 'block':'none';
+  if(checks.length>0){
+    const totUren   = [...checks].reduce((a,c)=>{ const u=(cachedUren||[]).find(x=>x.id===c.dataset.id); return a+(+u?.uren||0); },0);
+    const totBedrag = [...checks].reduce((a,c)=>{ const u=(cachedUren||[]).find(x=>x.id===c.dataset.id); return a+(+u?.excl_tot||0); },0);
+    acties.innerHTML=`<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <span style="color:var(--text3);font-size:13px">${checks.length} regel(s) · ${totUren.toFixed(2)}u · €${totBedrag.toFixed(2)} excl.</span>
+      <button class="btn btn-primary" onclick="urenNaarFactuur()">⚡ Factureren</button>
+    </div>`;
+  }
+}
+
+async function bewerkUren(id){
+  const u = (cachedUren||[]).find(x=>x.id===id);
+  if(!u) return;
+  initUrenModal(u);
+  openModal('modalUren');
+}
+
+async function verwijderUren(id){
+  if(!confirm('Uren verwijderen?')) return;
+  await dbDelete('uren_registratie',`?id=eq.${id}`);
+  toast('Verwijderd');
+  await renderUren();
+}
+
+async function urenNaarFactuur(){
+  const checks   = [...document.querySelectorAll('.urenCheck:checked')];
+  if(!checks.length) return toast('Selecteer eerst uren','err');
+
+  const ids      = checks.map(c=>c.dataset.id);
+  const geselecteerd = (cachedUren||[]).filter(u=>ids.includes(u.id));
+  if(!geselecteerd.length) return toast('Geen uren gevonden','err');
+
+  // Groepeer op klant
+  const klantNaam  = geselecteerd[0].klant_naam;
+  const klantId    = geselecteerd[0].klant_id;
+  const klant      = (cachedKlanten||[]).find(k=>k.id===klantId);
+  const inst       = window._bedrijfInst||{};
+  const prefix     = inst.factuur_prefix||'F';
+  const volgnr     = inst.factuur_volgnr||1;
+  const nr         = `${prefix}${String(volgnr).padStart(4,'0')}`;
+  const vandaag    = new Date().toISOString().split('T')[0];
+
+  const totExcl = round2(geselecteerd.reduce((a,u)=>a+(+u.excl_tot||0),0));
+  const totBtw  = round2(geselecteerd.reduce((a,u)=>a+(+u.btw_tot||0),0));
+  const totIncl = round2(geselecteerd.reduce((a,u)=>a+(+u.incl_tot||0),0));
+
+  if(!confirm(`${geselecteerd.length} urenregel(s) omzetten naar factuur ${nr} voor ${klantNaam}?`)) return;
+
+  try {
+    const nieuwF = await dbInsert('facturen',{
+      bedrijf_id:   huidigeBedrijfId,
+      nr, datum:    vandaag,
+      factuur_type: 'dienst',
+      klant_naam:   klantNaam,
+      klant_adres:  klant?.adres||null,
+      klant_plaats: klant?.plaats||null,
+      klant_email:  klant?.email||null,
+      tot_excl: totExcl, tot_btw: totBtw, tot_incl: totIncl,
+    });
+    if(!nieuwF?.id) throw new Error('Factuur aanmaken mislukt');
+
+    // Regels aanmaken per urenregel
+    await Promise.all(geselecteerd.map((u,idx)=>dbInsert('factuur_regels',{
+      factuur_id:  nieuwF.id, bedrijf_id: huidigeBedrijfId,
+      naam:        `${u.omschrijving} (${(+u.uren).toFixed(2)}u × €${(+u.tarief).toFixed(2)}/u)`,
+      aantal:      +u.uren, prijs: +u.tarief,
+      btw_type:    'excl', btw_perc: +u.btw_perc||21,
+      excl_tot:    +u.excl_tot, btw_tot: +u.btw_tot, incl_tot: +u.incl_tot,
+    })));
+
+    // Uren markeren als gefactureerd
+    await Promise.all(ids.map(id=>dbUpdate('uren_registratie',`?id=eq.${id}`,{status:'gefactureerd', factuur_id: nieuwF.id})));
+
+    // Volgnr ophogen
+    await dbUpdate('bedrijven',`?id=eq.${huidigeBedrijfId}`,{factuur_volgnr: volgnr+1});
+    window._bedrijfInst.factuur_volgnr = volgnr+1;
+
+    toast(`✅ Factuur ${nr} aangemaakt`);
+    await renderUren();
+    await renderFacturen();
+    downloadPDF(nieuwF.id);
+  } catch(e){ toast('Fout: '+e.message,'err'); }
+}
+
+// ── PROJECTEN ──
+async function renderProjecten(){
+  const tbody = document.getElementById('projectenBody');
+  if(!cachedProjecten.length){
+    tbody.innerHTML='<tr><td colspan="7"><div class="empty"><div class="empty-icon">📁</div><div class="empty-text">Nog geen projecten</div></div></td></tr>'; return;
+  }
+  tbody.innerHTML = cachedProjecten.map(p=>{
+    const pUren       = (cachedUren||[]).filter(u=>u.project_id===p.id);
+    const totUren     = pUren.reduce((a,u)=>a+(+u.uren||0),0);
+    const gefactUren  = pUren.filter(u=>u.status==='gefactureerd').reduce((a,u)=>a+(+u.uren||0),0);
+    const openUren    = totUren-gefactUren;
+    const budget      = p.budget_uren;
+    const pct         = budget ? Math.min(100,Math.round(totUren/budget*100)) : null;
+    return `<tr>
+      <td>
+        <div style="font-weight:600">${p.naam}</div>
+        ${pct!==null?`<div style="margin-top:4px;background:var(--bg3);border-radius:4px;height:4px;width:120px"><div style="background:${pct>90?'var(--red)':'var(--accent)'};border-radius:4px;height:4px;width:${pct}%"></div></div><div style="font-size:10px;color:var(--text3)">${totUren.toFixed(1)}u / ${budget}u</div>`:''}
+      </td>
+      <td>${p.klant_naam||'—'}</td>
+      <td>€${(+p.tarief||0).toFixed(2)}/u</td>
+      <td style="font-weight:600">${totUren.toFixed(2)}u</td>
+      <td style="color:var(--green)">${gefactUren.toFixed(2)}u</td>
+      <td style="color:${openUren>0?'var(--accent)':'var(--text3)'};font-weight:${openUren>0?'700':'400'}">${openUren.toFixed(2)}u</td>
+      <td><div class="row-actions">
+        <button class="btn btn-ghost btn-sm" onclick="bewerkProject('${p.id}')">✏️</button>
+        <button class="btn btn-danger btn-sm" onclick="verwijderProject('${p.id}')">✕</button>
+      </div></td>
+    </tr>`;
+  }).join('');
+}
+
+async function bewerkProject(id){
+  const p = cachedProjecten.find(x=>x.id===id);
+  if(!p) return;
+  initProjectModal(p);
+  openModal('modalProject');
+}
+
+async function verwijderProject(id){
+  if(!confirm('Project verwijderen? Uren blijven bewaard.')) return;
+  await dbDelete('projecten',`?id=eq.${id}`);
+  toast('Project verwijderd');
+  await renderUren();
+}
+
+// ── OVERZICHT ──
+function renderUrenOverzicht(){
+  const periode  = document.getElementById('overzichtPeriode').value;
+  const el       = document.getElementById('urenOverzichtGrid');
+  const data     = cachedUren||[];
+  if(!data.length){ el.innerHTML='<div style="color:var(--text3)">Nog geen uren geregistreerd.</div>'; return; }
+
+  const groepen  = {};
+  data.forEach(u=>{
+    const d = new Date(u.datum);
+    let key;
+    if(periode==='week'){
+      const week = getWeekNr(d);
+      key = `${d.getFullYear()}-W${String(week).padStart(2,'0')}`;
+    } else {
+      key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    }
+    if(!groepen[key]) groepen[key]={uren:0,bedrag:0,items:[]};
+    groepen[key].uren   = round2(groepen[key].uren   + (+u.uren||0));
+    groepen[key].bedrag = round2(groepen[key].bedrag + (+u.excl_tot||0));
+    groepen[key].items.push(u);
+  });
+
+  const maanden = ['Jan','Feb','Mrt','Apr','Mei','Jun','Jul','Aug','Sep','Okt','Nov','Dec'];
+  el.innerHTML = Object.entries(groepen).sort((a,b)=>b[0].localeCompare(a[0])).map(([key,g])=>`
+    <div style="background:var(--bg3);border-radius:10px;padding:14px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="font-weight:700;color:var(--text1)">${formateerPeriodeLabel(key, periode, maanden)}</div>
+        <div style="display:flex;gap:16px">
+          <span style="font-size:13px;color:var(--text3)">${g.uren.toFixed(2)}u</span>
+          <span style="font-weight:700;color:var(--accent)">€${g.bedrag.toFixed(2).replace('.',',')}</span>
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        ${[...new Set(g.items.map(u=>u.klant_naam))].map(k=>`<span class="badge badge-dienst">${k}</span>`).join('')}
+      </div>
+    </div>`).join('');
+}
+
+function formateerPeriodeLabel(key, periode, maanden){
+  if(periode==='week'){
+    const [jaar, week] = key.split('-W');
+    return `Week ${week} · ${jaar}`;
+  } else {
+    const [jaar, maand] = key.split('-');
+    return `${maanden[+maand-1]} ${jaar}`;
+  }
+}
+
+function getWeekNr(d){
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const day  = date.getUTCDay()||7;
+  date.setUTCDate(date.getUTCDate()+4-day);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(),0,1));
+  return Math.ceil((((date-yearStart)/86400000)+1)/7);
 }
 
 async function renderAll(){
