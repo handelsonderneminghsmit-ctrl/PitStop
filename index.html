@@ -445,6 +445,7 @@ tr:last-child td{border-bottom:none;}
       <button class="nav-btn" onclick="showTab('offerte')"><span class="icon">📝</span> Nieuwe Offerte</button>
       <button class="nav-btn" onclick="showTab('facturen')"><span class="icon">📄</span> Facturen</button>
       <button class="nav-btn" onclick="showTab('offertes')"><span class="icon">📋</span> Offertes</button>
+      <button class="nav-btn" onclick="showTab('terugkerend')"><span class="icon">🔁</span> Terugkerend</button>
       <button class="nav-btn" onclick="showTab('klanten')"><span class="icon">👥</span> Klanten</button>
       <button class="nav-btn" onclick="showTab('producten')"><span class="icon">🔧</span> Producten</button>
       <div class="nav-label" style="margin-top:10px">Systeem</div>
@@ -724,6 +725,28 @@ tr:last-child td{border-bottom:none;}
       </div>
     </section>
 
+    <!-- TERUGKERENDE FACTUREN -->
+    <section id="terugkerend">
+      <div class="page-header">
+        <div class="page-title">Terugkerende <span>Facturen</span></div>
+        <button class="btn btn-primary" onclick="openModal('modalTerugkerend')">➕ Nieuwe instelling</button>
+      </div>
+
+      <!-- Samenvatting -->
+      <div class="stats-grid" style="margin-bottom:16px">
+        <div class="stat-card"><div class="stat-label">Actief</div><div class="stat-value" id="trActief">0</div></div>
+        <div class="stat-card blue"><div class="stat-label">Deze maand aangemaakt</div><div class="stat-value" id="trDezeMaand">0</div></div>
+        <div class="stat-card green"><div class="stat-label">Volgende aanmaak</div><div class="stat-value" id="trVolgende" style="font-size:16px">—</div></div>
+      </div>
+
+      <div class="card" style="padding:0">
+        <div class="table-wrap">
+          <table><thead><tr><th>Klant</th><th>Omschrijving</th><th>Bedrag</th><th>Interval</th><th>Volgende</th><th>Status</th><th>Acties</th></tr></thead>
+          <tbody id="terugkerendBody"><tr><td colspan="7"><div class="loading"><div class="spinner"></div></div></td></tr></tbody></table>
+        </div>
+      </div>
+    </section>
+
     <!-- UPGRADE -->
     <section id="upgrade">
       <div id="demoBanner" style="display:none;background:linear-gradient(135deg,#F97316,#ea580c);color:#fff;padding:14px 20px;border-radius:12px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
@@ -950,6 +973,51 @@ tr:last-child td{border-bottom:none;}
   </div>
 </div>
 
+<!-- MODAL: Terugkerende factuur -->
+<div class="modal-backdrop" id="modalTerugkerend">
+  <div class="modal" style="max-width:620px">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Terugkerende factuur instellen</div>
+
+    <div class="form-grid">
+      <div class="form-group"><label>Klant</label><select id="trKlantSelect" onchange="laadTrKlant()"><option value="">— Selecteer klant —</option></select></div>
+      <div class="form-group"><label>Of nieuwe naam</label><input id="trKlantNaam" placeholder="Klantnaam"></div>
+      <div class="form-group"><label>Email klant <span style="color:var(--text3);font-weight:400">(voor automatisch versturen)</span></label><input id="trKlantEmail" placeholder="klant@bedrijf.nl" type="email"></div>
+    </div>
+
+    <div class="divider"></div>
+    <div style="font-weight:600;color:var(--text1);margin-bottom:10px">Factuurregel</div>
+    <div class="form-group"><label>Omschrijving</label><input id="trOmschrijving" placeholder="Bijv. Maandelijkse servicekosten"></div>
+    <div class="form-grid-3">
+      <div class="form-group"><label>Bedrag</label><input id="trBedrag" type="number" placeholder="0.00" step="0.01"></div>
+      <div class="form-group"><label>BTW %</label><select id="trBtwPerc"><option value="21">21%</option><option value="9">9%</option><option value="0">0%</option></select></div>
+      <div class="form-group"><label>Prijs is</label><select id="trBtwType"><option value="excl">Excl. BTW</option><option value="incl">Incl. BTW</option><option value="marge">Marge</option></select></div>
+    </div>
+
+    <div class="divider"></div>
+    <div style="font-weight:600;color:var(--text1);margin-bottom:10px">Planning</div>
+    <div class="form-grid">
+      <div class="form-group"><label>Interval</label>
+        <select id="trInterval">
+          <option value="week">Wekelijks</option>
+          <option value="2week">Elke 2 weken</option>
+          <option value="maand" selected>Maandelijks</option>
+          <option value="kwartaal">Per kwartaal</option>
+          <option value="halfjaar">Halfjaarlijks</option>
+          <option value="jaar">Jaarlijks</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Eerste aanmaakdatum</label><input id="trStartdatum" type="date"></div>
+      <div class="form-group"><label>Einddatum <span style="color:var(--text3);font-weight:400">(leeg = oneindig)</span></label><input id="trEinddatum" type="date" placeholder="Optioneel"></div>
+    </div>
+
+    <div style="display:flex;gap:10px;margin-top:16px">
+      <button class="btn btn-primary" onclick="slaaTerugkerendOp()">💾 Opslaan</button>
+      <button class="btn btn-sec" onclick="closeModal('modalTerugkerend')">Annuleren</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: Klant -->
 <div class="modal-backdrop" id="modalKlant">
   <div class="modal">
@@ -1093,7 +1161,10 @@ function toast(msg, type='ok'){
 }
 
 // ── MODALS ──
-function openModal(id){ document.getElementById(id).classList.add('open'); }
+function openModal(id){
+  document.getElementById(id).classList.add('open');
+  if(id==='modalTerugkerend') initTerugkerendModal();
+}
 function sluitModal(id){ document.getElementById(id).classList.remove('open'); }
 document.querySelectorAll('.modal-backdrop').forEach(el=>{
   el.addEventListener('click',e=>{ if(e.target===el) el.classList.remove('open'); });
@@ -1203,6 +1274,8 @@ async function verwerkIngelogdeGebruiker(user) {
     renderAll();
     verwerkAbonnementUI();
     selectPeriode('maand');
+    // Check terugkerende facturen bij inloggen
+    setTimeout(()=>checkEnMaakTerugkerendAan(false), 2000);
   } else if (statusData === 'geweigerd') {
     document.getElementById('authScreen').style.display = 'flex';
     toonAuthTab('geweigerd');
@@ -1382,6 +1455,7 @@ function showTab(id){
   if(id==='dashboard')    renderDashboard();
   if(id==='facturen')     renderFacturen();
   if(id==='offertes')     renderOffertes();
+  if(id==='terugkerend')  renderTerugkerend();
   if(id==='klanten')      renderKlanten();
   if(id==='producten')    renderProducten();
   if(id==='offerte')      initOfferteForm();
@@ -3083,8 +3157,225 @@ function genereerOffertePDF(o, regels, S){
   doc.save(`${o.nr}.pdf`);
 }
 
+// ══════════════════════════════════════════════════════════
+//  TERUGKERENDE FACTUREN
+// ══════════════════════════════════════════════════════════
+
+let cachedTerugkerend = [];
+
+const TR_INTERVAL_LABELS = {
+  week:'Wekelijks', '2week':'Elke 2 weken', maand:'Maandelijks',
+  kwartaal:'Per kwartaal', halfjaar:'Halfjaarlijks', jaar:'Jaarlijks'
+};
+
+function volgendedatum(vanafDatum, interval){
+  const d = new Date(vanafDatum);
+  switch(interval){
+    case 'week':     d.setDate(d.getDate()+7); break;
+    case '2week':    d.setDate(d.getDate()+14); break;
+    case 'maand':    d.setMonth(d.getMonth()+1); break;
+    case 'kwartaal': d.setMonth(d.getMonth()+3); break;
+    case 'halfjaar': d.setMonth(d.getMonth()+6); break;
+    case 'jaar':     d.setFullYear(d.getFullYear()+1); break;
+  }
+  return d.toISOString().split('T')[0];
+}
+
+function initTerugkerendModal(){
+  const vandaag = new Date().toISOString().split('T')[0];
+  document.getElementById('trStartdatum').value = vandaag;
+  document.getElementById('trEinddatum').value  = '';
+  ['trKlantNaam','trKlantEmail','trOmschrijving','trBedrag'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+  document.getElementById('trInterval').value  = 'maand';
+  document.getElementById('trBtwPerc').value   = window._bedrijfInst?.standaard_btw_perc||21;
+  document.getElementById('trBtwType').value   = window._bedrijfInst?.standaard_btw_type||'excl';
+
+  const sel = document.getElementById('trKlantSelect');
+  sel.innerHTML = '<option value="">— Selecteer klant —</option>';
+  (cachedKlanten||[]).forEach(k=>{
+    const o=document.createElement('option'); o.value=k.id; o.textContent=k.naam; sel.appendChild(o);
+  });
+}
+
+function laadTrKlant(){
+  const id = document.getElementById('trKlantSelect').value;
+  const k  = (cachedKlanten||[]).find(k=>k.id===id);
+  if(!k) return;
+  document.getElementById('trKlantNaam').value  = k.naam||'';
+  document.getElementById('trKlantEmail').value = k.email||'';
+}
+
+async function slaaTerugkerendOp(){
+  const klantNaam   = document.getElementById('trKlantNaam').value.trim();
+  const klantEmail  = document.getElementById('trKlantEmail').value.trim();
+  const omschrijving= document.getElementById('trOmschrijving').value.trim();
+  const bedrag      = +document.getElementById('trBedrag').value||0;
+  const btwPerc     = +document.getElementById('trBtwPerc').value||21;
+  const btwType     = document.getElementById('trBtwType').value;
+  const interval    = document.getElementById('trInterval').value;
+  const startdatum  = document.getElementById('trStartdatum').value;
+  const einddatum   = document.getElementById('trEinddatum').value||null;
+
+  if(!klantNaam)    return toast('Vul een klantnaam in','err');
+  if(!omschrijving) return toast('Vul een omschrijving in','err');
+  if(!bedrag)       return toast('Vul een bedrag in','err');
+  if(!startdatum)   return toast('Vul een startdatum in','err');
+
+  // Bedrag berekenen
+  let exclTot, btwTot, inclTot;
+  if(btwType==='marge'){ exclTot=bedrag; btwTot=0; inclTot=bedrag; }
+  else if(btwType==='excl'){ exclTot=bedrag; btwTot=round2(bedrag*btwPerc/100); inclTot=round2(exclTot+btwTot); }
+  else { inclTot=bedrag; exclTot=round2(bedrag/(1+btwPerc/100)); btwTot=round2(inclTot-exclTot); }
+
+  try {
+    await dbInsert('terugkerende_facturen',{
+      bedrijf_id:   huidigeBedrijfId,
+      klant_naam:   klantNaam,
+      klant_email:  klantEmail||null,
+      omschrijving, bedrag,
+      btw_type:     btwType,
+      btw_perc:     btwType==='marge'?0:btwPerc,
+      excl_tot:     exclTot, btw_tot: btwTot, incl_tot: inclTot,
+      interval, startdatum,
+      volgende_datum: startdatum,
+      einddatum,
+      status: 'actief',
+    });
+    closeModal('modalTerugkerend');
+    toast('✅ Terugkerende factuur opgeslagen');
+    await renderTerugkerend();
+  } catch(e){ toast('Fout: '+e.message,'err'); }
+}
+
+async function renderTerugkerend(){
+  if(!huidigeBedrijfId) return;
+  cachedTerugkerend = await dbGet('terugkerende_facturen',
+    `?select=*&bedrijf_id=eq.${huidigeBedrijfId}&order=volgende_datum.asc`);
+
+  const data = cachedTerugkerend||[];
+  const actief = data.filter(t=>t.status==='actief');
+  const dezeMaand = data.filter(t=>{
+    const d=new Date(t.volgende_datum||t.startdatum);
+    const nu=new Date();
+    return d.getMonth()===nu.getMonth()&&d.getFullYear()===nu.getFullYear();
+  });
+  const volgend = actief[0]?.volgende_datum;
+
+  document.getElementById('trActief').textContent     = actief.length;
+  document.getElementById('trDezeMaand').textContent  = dezeMaand.length;
+  document.getElementById('trVolgende').textContent   = volgend ? new Date(volgend).toLocaleDateString('nl-NL') : '—';
+
+  const tbody = document.getElementById('terugkerendBody');
+  if(!data.length){
+    tbody.innerHTML='<tr><td colspan="7"><div class="empty"><div class="empty-icon">🔁</div><div class="empty-text">Nog geen terugkerende facturen</div></div></td></tr>'; return;
+  }
+  const eur = v=>'€'+((+v||0).toFixed(2).replace('.',','));
+  const fmt = d=>d?new Date(d).toLocaleDateString('nl-NL'):'—';
+  tbody.innerHTML=data.map(t=>`<tr>
+    <td><div style="font-weight:600">${t.klant_naam}</div><div style="font-size:11px;color:var(--text3)">${t.klant_email||'geen email'}</div></td>
+    <td>${t.omschrijving}</td>
+    <td>${eur(t.incl_tot)}</td>
+    <td><span class="badge badge-dienst">${TR_INTERVAL_LABELS[t.interval]||t.interval}</span></td>
+    <td style="${new Date(t.volgende_datum)<=new Date()?'color:var(--accent);font-weight:600':''}">${fmt(t.volgende_datum)}</td>
+    <td><span class="badge badge-${t.status==='actief'?'geaccepteerd':'concept'}">${t.status==='actief'?'Actief':'Gepauzeerd'}</span></td>
+    <td><div class="row-actions">
+      <button class="btn btn-primary btn-sm" onclick="maakTerugkerendNuAan('${t.id}')" title="Nu aanmaken">⚡ Nu</button>
+      <button class="btn btn-ghost btn-sm" onclick="toggleTerugkerendStatus('${t.id}','${t.status}')">${t.status==='actief'?'⏸ Pauzeer':'▶ Hervat'}</button>
+      <button class="btn btn-danger btn-sm" onclick="verwijderTerugkerend('${t.id}')">✕</button>
+    </div></td>
+  </tr>`).join('');
+
+  // Controleer of er facturen klaarstaan
+  await checkEnMaakTerugkerendAan(false);
+}
+
+async function toggleTerugkerendStatus(id, huidig){
+  const nieuw = huidig==='actief' ? 'gepauzeerd' : 'actief';
+  await dbUpdate('terugkerende_facturen',`?id=eq.${id}`,{status:nieuw});
+  toast(nieuw==='actief' ? '▶ Hervat' : '⏸ Gepauzeerd');
+  await renderTerugkerend();
+}
+
+async function verwijderTerugkerend(id){
+  if(!confirm('Terugkerende factuur verwijderen?')) return;
+  await dbDelete('terugkerende_facturen',`?id=eq.${id}`);
+  toast('Verwijderd');
+  await renderTerugkerend();
+}
+
+async function maakTerugkerendNuAan(id){
+  const t = cachedTerugkerend.find(x=>x.id===id);
+  if(!t) return;
+  await maakFactuurVanTerugkerend(t);
+  await renderTerugkerend();
+}
+
+async function maakFactuurVanTerugkerend(t){
+  const inst = window._bedrijfInst||{};
+  const prefix = inst.factuur_prefix||'F';
+  const volgnr = inst.factuur_volgnr||1;
+  const nr     = `${prefix}${String(volgnr).padStart(4,'0')}`;
+  const vandaag= new Date().toISOString().split('T')[0];
+
+  try {
+    const nieuwF = await dbInsert('facturen',{
+      bedrijf_id:   huidigeBedrijfId,
+      nr, datum:    vandaag,
+      factuur_type: 'dienst',
+      klant_naam:   t.klant_naam,
+      klant_email:  t.klant_email||null,
+      tot_excl: t.excl_tot, tot_btw: t.btw_tot, tot_incl: t.incl_tot,
+    });
+    if(!nieuwF?.id) throw new Error('Factuur aanmaken mislukt');
+
+    await dbInsert('factuur_regels',{
+      factuur_id:  nieuwF.id, bedrijf_id: huidigeBedrijfId,
+      naam:        t.omschrijving, aantal: 1, prijs: t.bedrag,
+      btw_type:    t.btw_type, btw_perc: t.btw_perc,
+      excl_tot:    t.excl_tot, btw_tot: t.btw_tot, incl_tot: t.incl_tot,
+    });
+
+    // Volgnr + volgende datum bijwerken
+    await dbUpdate('bedrijven',`?id=eq.${huidigeBedrijfId}`,{factuur_volgnr: volgnr+1});
+    window._bedrijfInst.factuur_volgnr = volgnr+1;
+
+    const volgend = volgendedatum(t.volgende_datum||vandaag, t.interval);
+    const verlopen = t.einddatum && volgend > t.einddatum;
+    await dbUpdate('terugkerende_facturen',`?id=eq.${t.id}`,{
+      volgende_datum: volgend,
+      laatste_aanmaak: vandaag,
+      status: verlopen ? 'verlopen' : t.status,
+    });
+
+    toast(`✅ Factuur ${nr} aangemaakt voor ${t.klant_naam}`);
+    await renderFacturen();
+    return nieuwF;
+  } catch(e){ toast('Fout bij aanmaken: '+e.message,'err'); return null; }
+}
+
+async function checkEnMaakTerugkerendAan(toonMelding=true){
+  if(!huidigeBedrijfId) return;
+  const vandaag = new Date().toISOString().split('T')[0];
+  const klaar   = (cachedTerugkerend||[]).filter(t=>
+    t.status==='actief' && t.volgende_datum <= vandaag
+  );
+  if(!klaar.length){ if(toonMelding) toast('Geen facturen klaar voor vandaag'); return; }
+
+  let aangemaakt=0;
+  for(const t of klaar){
+    const result = await maakFactuurVanTerugkerend(t);
+    if(result) aangemaakt++;
+  }
+  // Herlaad lijst
+  cachedTerugkerend = await dbGet('terugkerende_facturen',
+    `?select=*&bedrijf_id=eq.${huidigeBedrijfId}&order=volgende_datum.asc`);
+  if(aangemaakt>0) toast(`✅ ${aangemaakt} terugkerende factuur${aangemaakt>1?'en':''} aangemaakt`);
+}
+
 async function renderAll(){
-  await Promise.all([renderDashboard(), renderKlanten(), renderProducten(), renderFacturen(), renderOffertes()]);
+  await Promise.all([renderDashboard(), renderKlanten(), renderProducten(), renderFacturen(), renderOffertes(), renderTerugkerend()]);
 }
 </script>
 </body>
