@@ -446,6 +446,7 @@ tr:last-child td{border-bottom:none;}
       <button class="nav-btn" onclick="showTab('facturen')"><span class="icon">📄</span> Facturen</button>
       <button class="nav-btn" onclick="showTab('offertes')"><span class="icon">📋</span> Offertes</button>
       <button class="nav-btn" onclick="showTab('terugkerend')"><span class="icon">🔁</span> Terugkerend</button>
+      <button class="nav-btn" onclick="showTab('inkopen')"><span class="icon">📥</span> Inkopen</button>
       <button class="nav-btn" onclick="showTab('klanten')"><span class="icon">👥</span> Klanten</button>
       <button class="nav-btn" onclick="showTab('producten')"><span class="icon">🔧</span> Producten</button>
       <div class="nav-label" style="margin-top:10px">Systeem</div>
@@ -725,6 +726,40 @@ tr:last-child td{border-bottom:none;}
       </div>
     </section>
 
+    <!-- INKOPEN -->
+    <section id="inkopen">
+      <div class="page-header">
+        <div class="page-title">Inkopen <span>Beheer</span></div>
+        <button class="btn btn-primary" onclick="openModal('modalInkoop')">➕ Inkoop registreren</button>
+      </div>
+
+      <!-- Stats -->
+      <div class="stats-grid" style="margin-bottom:16px">
+        <div class="stat-card"><div class="stat-label">Totaal ingekocht</div><div class="stat-value" id="inkStatTotaal"><small>€</small>0</div></div>
+        <div class="stat-card red"><div class="stat-label">Openstaand</div><div class="stat-value" id="inkStatOpenstaand"><small>€</small>0</div></div>
+        <div class="stat-card green"><div class="stat-label">Betaald</div><div class="stat-value" id="inkStatBetaald"><small>€</small>0</div></div>
+        <div class="stat-card blue"><div class="stat-label">BTW terug te vorderen</div><div class="stat-value" id="inkStatBtw"><small>€</small>0</div></div>
+      </div>
+
+      <!-- Filter -->
+      <div class="card" style="padding:12px 16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <input id="zoekInkoop" placeholder="🔍 Zoek op leverancier, nummer..." oninput="filterInkopen()" style="flex:1;min-width:200px">
+        <select id="filterInkoopStatus" onchange="filterInkopen()" style="width:150px">
+          <option value="">Alle statussen</option>
+          <option value="ontvangen">Ontvangen</option>
+          <option value="betaald">Betaald</option>
+          <option value="verlopen">Verlopen</option>
+        </select>
+      </div>
+
+      <div class="card" style="padding:0">
+        <div class="table-wrap">
+          <table><thead><tr><th>Leverancier</th><th>Factuurnr.</th><th>Datum</th><th>Vervaldatum</th><th>Excl. BTW</th><th>BTW</th><th>Incl. BTW</th><th>Status</th><th>Acties</th></tr></thead>
+          <tbody id="inkoopBody"><tr><td colspan="9"><div class="loading"><div class="spinner"></div></div></td></tr></tbody></table>
+        </div>
+      </div>
+    </section>
+
     <!-- TERUGKERENDE FACTUREN -->
     <section id="terugkerend">
       <div class="page-header">
@@ -973,6 +1008,50 @@ tr:last-child td{border-bottom:none;}
   </div>
 </div>
 
+<!-- MODAL: Inkoop -->
+<div class="modal-backdrop" id="modalInkoop">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="inkoopModalTitel">Inkoop registreren</div>
+
+    <div class="form-grid">
+      <div class="form-group"><label>Leverancier</label><input id="inkLeverancier" placeholder="Naam leverancier"></div>
+      <div class="form-group"><label>Factuurnummer leverancier</label><input id="inkFactuurNr" placeholder="INV-2024-001"></div>
+      <div class="form-group"><label>Factuurdatum</label><input id="inkDatum" type="date"></div>
+      <div class="form-group"><label>Vervaldatum</label><input id="inkVervaldatum" type="date"></div>
+    </div>
+
+    <div class="divider"></div>
+    <div style="font-weight:600;color:var(--text1);margin-bottom:10px">Bedragen</div>
+    <div class="form-grid">
+      <div class="form-group"><label>Omschrijving</label><input id="inkOmschrijving" placeholder="Bijv. Kantoorartikelen, onderdelen..."></div>
+      <div class="form-group"><label>Bedrag excl. BTW</label><input id="inkExcl" type="number" placeholder="0.00" step="0.01" oninput="berekenInkoopTotaal()"></div>
+      <div class="form-group"><label>BTW %</label>
+        <select id="inkBtwPerc" onchange="berekenInkoopTotaal()">
+          <option value="21">21%</option>
+          <option value="9">9%</option>
+          <option value="0">0% / Vrijgesteld</option>
+        </select>
+      </div>
+      <div class="form-group"><label>BTW bedrag</label><input id="inkBtw" type="number" placeholder="0.00" step="0.01" oninput="berekenInkoopInclVanBtw()"></div>
+      <div class="form-group"><label>Totaal incl. BTW</label><input id="inkIncl" type="number" placeholder="0.00" step="0.01" oninput="berekenInkoopVanIncl()"></div>
+    </div>
+
+    <div class="divider"></div>
+    <div style="font-weight:600;color:var(--text1);margin-bottom:10px">PDF bijlage <span style="font-size:12px;color:var(--text3);font-weight:400">(optioneel)</span></div>
+    <div class="form-group">
+      <label>Factuur uploaden</label>
+      <input id="inkPdfFile" type="file" accept=".pdf,image/*" onchange="verwerkInkoopBestand(this)">
+      <div id="inkBestandNaam" style="font-size:12px;color:var(--text3);margin-top:4px"></div>
+    </div>
+
+    <div style="display:flex;gap:10px;margin-top:16px">
+      <button class="btn btn-primary" onclick="slaanInkoopOp()">💾 Opslaan</button>
+      <button class="btn btn-sec" onclick="closeModal('modalInkoop')">Annuleren</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: Terugkerende factuur -->
 <div class="modal-backdrop" id="modalTerugkerend">
   <div class="modal" style="max-width:620px">
@@ -1164,6 +1243,7 @@ function toast(msg, type='ok'){
 function openModal(id){
   document.getElementById(id).classList.add('open');
   if(id==='modalTerugkerend') initTerugkerendModal();
+  if(id==='modalInkoop')      initInkoopModal();
 }
 function sluitModal(id){ document.getElementById(id).classList.remove('open'); }
 document.querySelectorAll('.modal-backdrop').forEach(el=>{
@@ -1456,6 +1536,7 @@ function showTab(id){
   if(id==='facturen')     renderFacturen();
   if(id==='offertes')     renderOffertes();
   if(id==='terugkerend')  renderTerugkerend();
+  if(id==='inkopen')      renderInkopen();
   if(id==='klanten')      renderKlanten();
   if(id==='producten')    renderProducten();
   if(id==='offerte')      initOfferteForm();
@@ -1553,9 +1634,9 @@ let _geselecteerdePeriode = 'maand';
 
 // Prijzen — vul jouw Stripe prijzen in
 const ABONNEMENT_PRIJZEN = {
-  maand:    { label: 'per maand',    prijs: '€15',   saving: '' },
-  kwartaal: { label: 'per kwartaal', prijs: '€40,50',   saving: '(bespaar 10%)' },
-  jaar:     { label: 'per jaar',     prijs: '€144',   saving: '(bespaar 20%)' },
+  maand:    { label: 'per maand',    prijs: '—',   saving: '' },
+  kwartaal: { label: 'per kwartaal', prijs: '—',   saving: '(bespaar 10%)' },
+  jaar:     { label: 'per jaar',     prijs: '—',   saving: '(bespaar 20%)' },
 };
 
 function isDemo() {
@@ -3374,8 +3455,218 @@ async function checkEnMaakTerugkerendAan(toonMelding=true){
   if(aangemaakt>0) toast(`✅ ${aangemaakt} terugkerende factuur${aangemaakt>1?'en':''} aangemaakt`);
 }
 
+// ══════════════════════════════════════════════════════════
+//  INKOPEN
+// ══════════════════════════════════════════════════════════
+
+let cachedInkopen = [];
+let _inkBestandBase64 = null;
+let _inkBestandNaam   = null;
+let _bewerkInkoopId   = null;
+
+function initInkoopModal(){
+  _bewerkInkoopId   = null;
+  _inkBestandBase64 = null;
+  _inkBestandNaam   = null;
+  document.getElementById('inkoopModalTitel').textContent = 'Inkoop registreren';
+  const vandaag = new Date();
+  const vervald = new Date(); vervald.setDate(vervald.getDate()+30);
+  const fmt = d => d.toISOString().split('T')[0];
+  document.getElementById('inkDatum').value      = fmt(vandaag);
+  document.getElementById('inkVervaldatum').value= fmt(vervald);
+  ['inkLeverancier','inkFactuurNr','inkOmschrijving'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+  ['inkExcl','inkBtw','inkIncl'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+  document.getElementById('inkBtwPerc').value = '21';
+  document.getElementById('inkBestandNaam').textContent = '';
+  document.getElementById('inkPdfFile').value = '';
+}
+
+function berekenInkoopTotaal(){
+  const excl = +document.getElementById('inkExcl').value||0;
+  const perc = +document.getElementById('inkBtwPerc').value||0;
+  const btw  = round2(excl * perc / 100);
+  const incl = round2(excl + btw);
+  document.getElementById('inkBtw').value  = btw||'';
+  document.getElementById('inkIncl').value = incl||'';
+}
+
+function berekenInkoopInclVanBtw(){
+  const excl = +document.getElementById('inkExcl').value||0;
+  const btw  = +document.getElementById('inkBtw').value||0;
+  document.getElementById('inkIncl').value = round2(excl+btw)||'';
+}
+
+function berekenInkoopVanIncl(){
+  const incl = +document.getElementById('inkIncl').value||0;
+  const perc = +document.getElementById('inkBtwPerc').value||0;
+  const excl = round2(incl/(1+perc/100));
+  const btw  = round2(incl-excl);
+  document.getElementById('inkExcl').value = excl||'';
+  document.getElementById('inkBtw').value  = btw||'';
+}
+
+function verwerkInkoopBestand(input){
+  const file = input.files[0];
+  if(!file) return;
+  if(file.size > 5*1024*1024){ toast('Bestand te groot (max 5MB)','err'); return; }
+  _inkBestandNaam = file.name;
+  document.getElementById('inkBestandNaam').textContent = `📎 ${file.name}`;
+  const reader = new FileReader();
+  reader.onload = e => { _inkBestandBase64 = e.target.result; };
+  reader.readAsDataURL(file);
+}
+
+async function slaanInkoopOp(){
+  const leverancier  = document.getElementById('inkLeverancier').value.trim();
+  const factuurNr    = document.getElementById('inkFactuurNr').value.trim();
+  const omschrijving = document.getElementById('inkOmschrijving').value.trim();
+  const datum        = document.getElementById('inkDatum').value;
+  const vervaldatum  = document.getElementById('inkVervaldatum').value;
+  const excl         = +document.getElementById('inkExcl').value||0;
+  const btw          = +document.getElementById('inkBtw').value||0;
+  const incl         = +document.getElementById('inkIncl').value||0;
+  const btwPerc      = +document.getElementById('inkBtwPerc').value||0;
+
+  if(!leverancier)  return toast('Vul een leverancier in','err');
+  if(!datum)        return toast('Vul een datum in','err');
+  if(!incl)         return toast('Vul een bedrag in','err');
+
+  const body = {
+    bedrijf_id:   huidigeBedrijfId,
+    leverancier, factuur_nr: factuurNr||null,
+    omschrijving: omschrijving||null,
+    datum, vervaldatum: vervaldatum||null,
+    excl_btw: excl, btw_bedrag: btw, incl_btw: incl, btw_perc: btwPerc,
+    bijlage_base64: _inkBestandBase64||null,
+    bijlage_naam:   _inkBestandNaam||null,
+    status: 'ontvangen',
+  };
+
+  try {
+    if(_bewerkInkoopId){
+      await dbUpdate('inkopen',`?id=eq.${_bewerkInkoopId}`, body);
+      toast('✅ Inkoop bijgewerkt');
+    } else {
+      await dbInsert('inkopen', body);
+      toast('✅ Inkoop geregistreerd');
+    }
+    closeModal('modalInkoop');
+    await renderInkopen();
+  } catch(e){ toast('Fout: '+e.message,'err'); }
+}
+
+async function renderInkopen(){
+  if(!huidigeBedrijfId) return;
+  cachedInkopen = await dbGet('inkopen',
+    `?select=*&bedrijf_id=eq.${huidigeBedrijfId}&order=datum.desc`);
+  updateInkoopStats(cachedInkopen||[]);
+  toonInkopen(cachedInkopen||[]);
+}
+
+function updateInkoopStats(data){
+  const eur = v => { const n=(+v||0); return n.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,'.'); };
+  const totaal     = data.reduce((a,i)=>a+(+i.incl_btw||0),0);
+  const betaald    = data.filter(i=>i.status==='betaald').reduce((a,i)=>a+(+i.incl_btw||0),0);
+  const openstaand = data.filter(i=>i.status==='ontvangen').reduce((a,i)=>a+(+i.incl_btw||0),0);
+  const btwTerug   = data.filter(i=>i.status!=='verlopen').reduce((a,i)=>a+(+i.btw_bedrag||0),0);
+  document.getElementById('inkStatTotaal').innerHTML     = `<small>€</small>${eur(totaal)}`;
+  document.getElementById('inkStatOpenstaand').innerHTML = `<small>€</small>${eur(openstaand)}`;
+  document.getElementById('inkStatBetaald').innerHTML    = `<small>€</small>${eur(betaald)}`;
+  document.getElementById('inkStatBtw').innerHTML        = `<small>€</small>${eur(btwTerug)}`;
+}
+
+function filterInkopen(){
+  const q  = document.getElementById('zoekInkoop').value.toLowerCase();
+  const st = document.getElementById('filterInkoopStatus').value;
+  toonInkopen(cachedInkopen.filter(i=>{
+    const matchQ  = !q  || (i.leverancier||'').toLowerCase().includes(q) || (i.factuur_nr||'').toLowerCase().includes(q) || (i.omschrijving||'').toLowerCase().includes(q);
+    const matchSt = !st || i.status===st;
+    return matchQ && matchSt;
+  }));
+}
+
+const INK_STATUS_LABELS = {ontvangen:'Ontvangen', betaald:'Betaald', verlopen:'Verlopen'};
+const INK_STATUS_BADGE  = {ontvangen:'badge-verzonden', betaald:'badge-geaccepteerd', verlopen:'badge-credit'};
+
+function toonInkopen(data){
+  const tbody = document.getElementById('inkoopBody');
+  if(!data.length){
+    tbody.innerHTML='<tr><td colspan="9"><div class="empty"><div class="empty-icon">📥</div><div class="empty-text">Nog geen inkopen geregistreerd</div></div></td></tr>'; return;
+  }
+  const eur = v => '€'+((+v||0).toFixed(2).replace('.',','));
+  const fmt = d => d ? new Date(d).toLocaleDateString('nl-NL') : '—';
+  const vandaag = new Date().toISOString().split('T')[0];
+  tbody.innerHTML=data.map(i=>{
+    const verlopen = i.status==='ontvangen' && i.vervaldatum && i.vervaldatum < vandaag;
+    return `<tr>
+      <td><div style="font-weight:600">${i.leverancier}</div>${i.omschrijving?`<div style="font-size:11px;color:var(--text3)">${i.omschrijving}</div>`:''}</td>
+      <td style="color:var(--text3);font-size:13px">${i.factuur_nr||'—'}</td>
+      <td>${fmt(i.datum)}</td>
+      <td style="${verlopen?'color:var(--red);font-weight:600':''}">${fmt(i.vervaldatum)}</td>
+      <td>${eur(i.excl_btw)}</td>
+      <td style="color:var(--text3)">${eur(i.btw_bedrag)}</td>
+      <td style="font-weight:700">${eur(i.incl_btw)}</td>
+      <td><span class="badge ${INK_STATUS_BADGE[i.status]||'badge-concept'}">${INK_STATUS_LABELS[i.status]||i.status}</span>${verlopen?'<div style="font-size:10px;color:var(--red)">Verlopen</div>':''}</td>
+      <td><div class="row-actions">
+        ${i.bijlage_base64?`<button class="btn btn-ghost btn-sm" onclick="bekijkInkoopBijlage('${i.id}')" title="Bijlage bekijken">📎</button>`:''}
+        ${i.status==='ontvangen'?`<button class="btn btn-ghost btn-sm" onclick="markeerInkoopBetaald('${i.id}')">✅ Betaald</button>`:''}
+        <button class="btn btn-ghost btn-sm" onclick="bewerkInkoop('${i.id}')">✏️</button>
+        <button class="btn btn-danger btn-sm" onclick="verwijderInkoop('${i.id}')">✕</button>
+      </div></td>
+    </tr>`;
+  }).join('');
+}
+
+async function markeerInkoopBetaald(id){
+  await dbUpdate('inkopen',`?id=eq.${id}`,{status:'betaald'});
+  toast('✅ Gemarkeerd als betaald');
+  await renderInkopen();
+}
+
+async function bewerkInkoop(id){
+  const i = cachedInkopen.find(x=>x.id===id);
+  if(!i) return;
+  _bewerkInkoopId   = id;
+  _inkBestandBase64 = i.bijlage_base64||null;
+  _inkBestandNaam   = i.bijlage_naam||null;
+  document.getElementById('inkoopModalTitel').textContent = 'Inkoop bewerken';
+  document.getElementById('inkLeverancier').value  = i.leverancier||'';
+  document.getElementById('inkFactuurNr').value    = i.factuur_nr||'';
+  document.getElementById('inkOmschrijving').value = i.omschrijving||'';
+  document.getElementById('inkDatum').value        = i.datum||'';
+  document.getElementById('inkVervaldatum').value  = i.vervaldatum||'';
+  document.getElementById('inkExcl').value         = i.excl_btw||'';
+  document.getElementById('inkBtw').value          = i.btw_bedrag||'';
+  document.getElementById('inkIncl').value         = i.incl_btw||'';
+  document.getElementById('inkBtwPerc').value      = i.btw_perc||21;
+  document.getElementById('inkBestandNaam').textContent = i.bijlage_naam ? `📎 ${i.bijlage_naam}` : '';
+  openModal('modalInkoop');
+}
+
+async function verwijderInkoop(id){
+  if(!confirm('Inkoop verwijderen?')) return;
+  await dbDelete('inkopen',`?id=eq.${id}`);
+  toast('Verwijderd');
+  await renderInkopen();
+}
+
+function bekijkInkoopBijlage(id){
+  const i = cachedInkopen.find(x=>x.id===id);
+  if(!i?.bijlage_base64) return;
+  const w = window.open();
+  if(i.bijlage_base64.startsWith('data:application/pdf')){
+    w.document.write(`<iframe src="${i.bijlage_base64}" width="100%" height="100%" style="border:none"></iframe>`);
+  } else {
+    w.document.write(`<img src="${i.bijlage_base64}" style="max-width:100%">`);
+  }
+}
+
 async function renderAll(){
-  await Promise.all([renderDashboard(), renderKlanten(), renderProducten(), renderFacturen(), renderOffertes(), renderTerugkerend()]);
+  await Promise.all([renderDashboard(), renderKlanten(), renderProducten(), renderFacturen(), renderOffertes(), renderTerugkerend(), renderInkopen()]);
 }
 </script>
 </body>
