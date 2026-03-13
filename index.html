@@ -480,6 +480,36 @@ tr:last-child td{border-bottom:none;}
         <div class="stat-card green"><div class="stat-label">Klanten</div><div class="stat-value" id="statKlanten">0</div></div>
         <div class="stat-card red"><div class="stat-label">Producten</div><div class="stat-value" id="statProducten">0</div></div>
       </div>
+
+      <!-- BTW PER KWARTAAL -->
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
+          <div class="card-title" style="margin:0">BTW overzicht per kwartaal</div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="btn btn-ghost btn-sm" onclick="btwJaarStap(-1)">‹</button>
+            <span id="btwJaarLabel" style="font-weight:700;color:var(--text1);min-width:40px;text-align:center"></span>
+            <button class="btn btn-ghost btn-sm" onclick="btwJaarStap(1)">›</button>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px" id="btwKwartaalGrid">
+          <div class="loading"><div class="spinner"></div></div>
+        </div>
+        <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px">
+          <div style="text-align:center">
+            <div style="font-size:11px;color:var(--text3);margin-bottom:4px">BTW ontvangen (jaar)</div>
+            <div style="font-size:18px;font-weight:700;color:var(--accent)" id="btwJaarOntvangen">€0</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:11px;color:var(--text3);margin-bottom:4px">BTW betaald inkopen (jaar)</div>
+            <div style="font-size:18px;font-weight:700;color:var(--blue)" id="btwJaarBetaald">€0</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Af te dragen (jaar)</div>
+            <div style="font-size:20px;font-weight:800" id="btwJaarAfdragen">€0</div>
+          </div>
+        </div>
+      </div>
+
       <div class="card"><div class="card-title">Recente facturen</div><div id="recentFacturen"><div class="loading"><div class="spinner"></div></div></div></div>
     </section>
 
@@ -1565,6 +1595,11 @@ async function renderDashboard(){
   document.getElementById('statKlanten').textContent=(klanten||[]).length;
   document.getElementById('statProducten').textContent=(producten||[]).length;
 
+  // BTW kwartaal
+  if(!window._btwJaar) window._btwJaar = new Date().getFullYear();
+  document.getElementById('btwJaarLabel').textContent = window._btwJaar;
+  await renderBtwKwartaal();
+
   const recent = await dbGet('facturen', `?select=*&bedrijf_id=eq.${huidigeBedrijfId}&order=aangemaakt_op.desc&limit=5`);
   const container=document.getElementById('recentFacturen');
   if(!recent||recent.length===0){ container.innerHTML='<div class="empty"><div class="empty-icon">📄</div><div class="empty-text">Nog geen facturen</div></div>'; return; }
@@ -1580,6 +1615,93 @@ async function renderDashboard(){
         <button class="btn btn-ghost btn-sm" onclick="downloadPDF('${f.id}')">📄 PDF</button>
       </div>
     </div>`).join('');
+}
+
+async function btwJaarStap(stap){
+  window._btwJaar = (window._btwJaar||new Date().getFullYear()) + stap;
+  document.getElementById('btwJaarLabel').textContent = window._btwJaar;
+  await renderBtwKwartaal();
+}
+
+async function renderBtwKwartaal(){
+  if(!huidigeBedrijfId) return;
+  const jaar = window._btwJaar||new Date().getFullYear();
+  const vanJaar = `${jaar}-01-01`;
+  const totJaar = `${jaar}-12-31`;
+
+  const [facturen, inkopen] = await Promise.all([
+    dbGet('facturen', `?select=datum,tot_btw,factuur_type&bedrijf_id=eq.${huidigeBedrijfId}&datum=gte.${vanJaar}&datum=lte.${totJaar}`),
+    dbGet('inkopen',  `?select=datum,btw_bedrag&bedrijf_id=eq.${huidigeBedrijfId}&datum=gte.${vanJaar}&datum=lte.${totJaar}`)
+  ]);
+
+  const kwartalen = [
+    { nr:1, label:'Q1', van:'01-01', tot:'03-31', maanden:'Jan – Mrt' },
+    { nr:2, label:'Q2', van:'04-01', tot:'06-30', maanden:'Apr – Jun' },
+    { nr:3, label:'Q3', van:'07-01', tot:'09-30', maanden:'Jul – Sep' },
+    { nr:4, label:'Q4', van:'10-01', tot:'12-31', maanden:'Okt – Dec' },
+  ];
+
+  const huidigKwartaal = Math.ceil((new Date().getMonth()+1)/3);
+  const huidigJaar     = new Date().getFullYear();
+  const eur2 = v => '€'+Math.abs(+v||0).toFixed(2).replace('.',',');
+
+  let jaarOntvangen=0, jaarBetaald=0;
+
+  const html = kwartalen.map(q=>{
+    const van = `${jaar}-${q.van}`;
+    const tot = `${jaar}-${q.tot}`;
+
+    const btwOntvangen = (facturen||[])
+      .filter(f=>f.datum>=van && f.datum<=tot && f.factuur_type!=='credit')
+      .reduce((a,f)=>a+(+f.tot_btw||0),0);
+
+    const btwCredit = (facturen||[])
+      .filter(f=>f.datum>=van && f.datum<=tot && f.factuur_type==='credit')
+      .reduce((a,f)=>a+Math.abs(+f.tot_btw||0),0);
+
+    const btwInkoop = (inkopen||[])
+      .filter(i=>i.datum>=van && i.datum<=tot)
+      .reduce((a,i)=>a+(+i.btw_bedrag||0),0);
+
+    const netto = round2(btwOntvangen - btwCredit - btwInkoop);
+    jaarOntvangen += btwOntvangen - btwCredit;
+    jaarBetaald   += btwInkoop;
+
+    const isHuidig = q.nr===huidigKwartaal && jaar===huidigJaar;
+    const isPositief = netto >= 0;
+
+    return `<div style="background:var(--bg3);border-radius:12px;padding:14px;border:1.5px solid ${isHuidig?'var(--accent)':'var(--border)'}">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="font-weight:700;color:var(--text1)">${q.label} ${isHuidig?'<span style="font-size:10px;background:var(--accent);color:#fff;padding:2px 6px;border-radius:10px;margin-left:4px">Huidig</span>':''}</div>
+        <div style="font-size:11px;color:var(--text3)">${q.maanden}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:5px">
+        <div style="display:flex;justify-content:space-between;font-size:12px">
+          <span style="color:var(--text3)">BTW ontvangen</span>
+          <span style="color:var(--green)">+${eur2(btwOntvangen-btwCredit)}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:12px">
+          <span style="color:var(--text3)">BTW inkopen</span>
+          <span style="color:var(--blue)">-${eur2(btwInkoop)}</span>
+        </div>
+        <div style="height:1px;background:var(--border);margin:4px 0"></div>
+        <div style="display:flex;justify-content:space-between">
+          <span style="font-size:12px;font-weight:600;color:var(--text1)">${isPositief?'Af te dragen':'Terug te vorderen'}</span>
+          <span style="font-size:16px;font-weight:800;color:${isPositief?'var(--accent)':'var(--green)'}">${isPositief?'':'-'}${eur2(netto)}</span>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('btwKwartaalGrid').innerHTML = html;
+
+  const jaarnetto = round2(jaarOntvangen - jaarBetaald);
+  const eur3 = v => '€'+(+v||0).toFixed(2).replace('.',',');
+  document.getElementById('btwJaarOntvangen').textContent = eur3(jaarOntvangen);
+  document.getElementById('btwJaarBetaald').textContent   = eur3(jaarBetaald);
+  const afdrEl = document.getElementById('btwJaarAfdragen');
+  afdrEl.textContent  = (jaarnetto<0?'-':'') + '€'+Math.abs(jaarnetto).toFixed(2).replace('.',',');
+  afdrEl.style.color  = jaarnetto>=0 ? 'var(--accent)' : 'var(--green)';
 }
 
 // ══════════════════════════════════════════════════════════
