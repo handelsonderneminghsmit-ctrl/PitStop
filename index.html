@@ -349,12 +349,13 @@ tr:last-child td{border-bottom:none;}
     <!-- REGISTER -->
     <div id="registerForm" class="auth-form" style="display:none">
       <input type="text"  id="regBedrijf" placeholder="Bedrijfsnaam" autocomplete="organization">
+      <input type="text"  id="regKvk"     placeholder="KVK-nummer (8 cijfers)" maxlength="8" oninput="this.value=this.value.replace(/\D/g,'')">
       <input type="email" id="regEmail"   placeholder="E-mailadres" autocomplete="email">
       <input type="password" id="regPass" placeholder="Wachtwoord (min. 6 tekens)" autocomplete="new-password">
       <div class="auth-err" id="regErr"></div>
       <button class="btn-auth" onclick="registreren()">Account aanmaken →</button>
       <div style="text-align:center;margin-top:10px;font-size:12px;color:var(--text3)">
-        Je krijgt direct een gratis demo account. Upgrade later naar Pro via Stripe.
+        Je KVK-nummer is vereist voor verificatie. Je krijgt direct een gratis demo account.
       </div>
     </div>
 
@@ -1938,29 +1939,42 @@ async function verwerkIngelogdeGebruiker(user) {
 
 async function registreren() {
   const bedrijf = document.getElementById('regBedrijf').value.trim();
+  const kvk     = document.getElementById('regKvk').value.trim();
   const email   = document.getElementById('regEmail').value.trim();
   const pass    = document.getElementById('regPass').value;
   const err     = document.getElementById('regErr');
   err.classList.remove('show');
-  if (!bedrijf||!email||!pass) { err.textContent='Vul alle velden in.'; err.classList.add('show'); return; }
+
+  if (!bedrijf||!kvk||!email||!pass) { err.textContent='Vul alle velden in.'; err.classList.add('show'); return; }
+  if (kvk.length !== 8 || !/^\d{8}$/.test(kvk)) { err.textContent='KVK-nummer moet uit 8 cijfers bestaan.'; err.classList.add('show'); return; }
   if (pass.length<6) { err.textContent='Wachtwoord minimaal 6 tekens.'; err.classList.add('show'); return; }
+
+  // Check of KVK al in gebruik is
+  try {
+    const bestaand = await fetch(`${SUPABASE_URL}/rest/v1/bedrijven?kvk_nr=eq.${kvk}&select=id`, {
+      headers: {'apikey': SUPABASE_ANON, 'Content-Type': 'application/json'}
+    });
+    const bestaandData = await bestaand.json();
+    if (Array.isArray(bestaandData) && bestaandData.length > 0) {
+      err.textContent = 'Dit KVK-nummer is al geregistreerd. Neem contact op als dit een fout is.';
+      err.classList.add('show'); return;
+    }
+  } catch(e) { /* doorgaan bij fout */ }
 
   try {
     const res = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
       method:'POST', headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON},
-      body: JSON.stringify({email, password:pass, data:{bedrijfsnaam:bedrijf}})
+      body: JSON.stringify({email, password:pass, data:{bedrijfsnaam:bedrijf, kvk_nr:kvk}})
     });
     const data = await res.json();
     if (!res.ok||data.error) { err.textContent=vertaalAuthFout(data.error_description||data.msg||'Registratie mislukt'); err.classList.add('show'); return; }
     const userId = data?.id || data?.user?.id;
     if (userId) {
-      // Registreer gebruiker en geef direct demo toegang (status = goedgekeurd)
       await fetch(`${SUPABASE_URL}/rest/v1/rpc/registreer_gebruiker`, {
         method:'POST', headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON},
-        body: JSON.stringify({p_user_id: userId, p_email: email, p_bedrijfsnaam: bedrijf})
+        body: JSON.stringify({p_user_id: userId, p_email: email, p_bedrijfsnaam: bedrijf, p_kvk_nr: kvk})
       });
     }
-    // Direct inloggen na registratie
     toast('✅ Account aangemaakt! Je wordt ingelogd...');
     setTimeout(async ()=>{
       document.getElementById('loginEmail').value = email;
