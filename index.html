@@ -2904,6 +2904,7 @@ function renderFactuurRijen(data){
       <button class="btn btn-ghost btn-sm" onclick="bewerkFactuur('${f.id}')">✏️</button>
       <button class="btn btn-ghost btn-sm" onclick="downloadPDF('${f.id}')">📄 PDF</button>
       <button class="btn btn-ghost btn-sm" onclick="mailFactuurKlant('${f.id}')" title="Mail naar klant">✉️ Klant</button>
+      ${bs!=='betaald'?`<button class="btn btn-ghost btn-sm" onclick="stuurHerinnering('${f.id}')" title="Betalingsherinnering">🔔 Herinnering</button>`:''}
       ${boekhouder?`<button class="btn btn-ghost btn-sm" onclick="mailFactuurBoekhouder('${f.id}')" title="Mail naar boekhouder">📊 Boekhouding</button>`:''}
       <button class="btn btn-danger btn-sm" onclick="verwijderFactuur('${f.id}')">✕</button>
     </div></td>
@@ -3755,6 +3756,162 @@ async function mailFactuurBoekhouder(factuurId){
   window.location.href = `mailto:${boekhouder}?subject=${onderwerp}&body=${body}`;
 }
 // ══════════════════════════════════════════════════════════
+//  EMAIL VERZENDING VIA BREVO
+// ══════════════════════════════════════════════════════════
+
+async function verstuurEmail(payload){
+  try {
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/verstuur-email`, {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json', 'Authorization': `Bearer ${window._accessToken}` },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.error || 'Verzenden mislukt');
+    return data;
+  } catch(e){ throw e; }
+}
+
+async function mailFactuurKlant(factuurId){
+  const f = cachedFacturen.find(x=>x.id===factuurId);
+  if(!f) return;
+  const S   = window._bedrijfInst||{};
+  const email = f.klant_email || prompt('E-mailadres klant:', '');
+  if(!email) return;
+
+  toast('📧 Email wordt verstuurd...');
+  try {
+    // Genereer PDF als base64
+    const pdfBase64 = await genereerPDFBase64(factuurId);
+    const datum = new Date(f.datum).toLocaleDateString('nl-NL');
+    const bericht = `Geachte ${f.klant_naam},\n\nHierbij ontvangt u factuur ${f.nr} d.d. ${datum} ten bedrage van ${eur(f.tot_incl)}.\n\n` +
+      (S.iban ? `Wij verzoeken u het bedrag over te maken op IBAN ${S.iban} o.v.v. ${f.nr}.\n\n` : '') +
+      `Met vriendelijke groet,\n${S.naam||''}\n${S.telefoon||''}\n${S.email||''}`.trim();
+
+    await verstuurEmail({
+      type:        'factuur',
+      factuur_id:  factuurId,
+      naar_email:  email,
+      naar_naam:   f.klant_naam,
+      pdf_base64:  pdfBase64,
+      bericht,
+    });
+    toast(`✅ Factuur ${f.nr} verstuurd naar ${email}`);
+  } catch(e){ toast('Fout bij verzenden: '+e.message,'err'); }
+}
+
+async function mailFactuurBoekhouder(factuurId){
+  const f = cachedFacturen.find(x=>x.id===factuurId);
+  if(!f) return;
+  const S = window._bedrijfInst||{};
+  const boekhouder = S.boekhouder_email;
+  if(!boekhouder) return toast('Geen boekhouder e-mailadres ingesteld','err');
+
+  toast('📧 Email wordt verstuurd naar boekhouder...');
+  try {
+    const pdfBase64 = await genereerPDFBase64(factuurId);
+    const datum = new Date(f.datum).toLocaleDateString('nl-NL');
+    const bericht = `Beste,\n\nBijgaand factuur ${f.nr} d.d. ${datum}.\n\nKlant: ${f.klant_naam}\nBedrag: ${eur(f.tot_incl)}${f.tot_btw>0?`\nBTW: ${eur(f.tot_btw)}`:''}${f.kenteken?`\nKenteken: ${f.kenteken}`:''}\n\nMet vriendelijke groet,\n${S.naam||''}`.trim();
+
+    await verstuurEmail({
+      type:        'factuur',
+      factuur_id:  factuurId,
+      naar_email:  boekhouder,
+      naar_naam:   'Boekhouder',
+      pdf_base64:  pdfBase64,
+      onderwerp:   `Factuur ${f.nr} - ${f.klant_naam} - ${eur(f.tot_incl)}`,
+      bericht,
+    });
+    toast(`✅ Factuur ${f.nr} verstuurd naar boekhouder`);
+  } catch(e){ toast('Fout bij verzenden: '+e.message,'err'); }
+}
+
+async function mailOfferte(offerteId){
+  const o = cachedOffertes.find(x=>x.id===offerteId);
+  if(!o) return;
+  const email = o.klant_email || prompt('E-mailadres klant:', '');
+  if(!email) return;
+
+  toast('📧 Offerte wordt verstuurd...');
+  try {
+    const pdfBase64 = await genereerOffertePDFBase64(offerteId);
+    const S = window._bedrijfInst||{};
+    const bericht = `Geachte ${o.klant_naam},\n\nHierbij ontvangt u onze offerte ${o.nr}.${o.referentie?`\nReferentie: ${o.referentie}`:''}\n\nDeze offerte is geldig tot ${o.geldig_tot?new Date(o.geldig_tot).toLocaleDateString('nl-NL'):'nader overeen te komen'}.\n\nNeem gerust contact op bij vragen.\n\nMet vriendelijke groet,\n${S.naam||''}\n${S.email||''}`.trim();
+
+    await verstuurEmail({
+      type:        'offerte',
+      offerte_id:  offerteId,
+      naar_email:  email,
+      naar_naam:   o.klant_naam,
+      pdf_base64:  pdfBase64,
+      bericht,
+    });
+    // Markeer als verzonden
+    await dbUpdate('offertes',`?id=eq.${offerteId}`,{status:'verzonden'});
+    await renderOffertes();
+    toast(`✅ Offerte ${o.nr} verstuurd naar ${email}`);
+  } catch(e){ toast('Fout bij verzenden: '+e.message,'err'); }
+}
+
+async function stuurHerinnering(factuurId){
+  const f = cachedFacturen.find(x=>x.id===factuurId);
+  if(!f) return;
+  const email = f.klant_email || prompt('E-mailadres klant:', '');
+  if(!email) return;
+
+  toast('📧 Herinnering wordt verstuurd...');
+  try {
+    const pdfBase64 = await genereerPDFBase64(factuurId);
+    const S = window._bedrijfInst||{};
+    const bericht = `Geachte ${f.klant_naam},\n\nOnlangs stuurden wij u factuur ${f.nr} ten bedrage van ${eur(f.tot_incl)}.\n\nNa controle blijkt dat wij de betaling nog niet hebben ontvangen. Mogen wij u vriendelijk verzoeken dit bedrag zo spoedig mogelijk te voldoen?${S.iban?`\n\nIBAN: ${S.iban}\nO.v.v. ${f.nr}`:''}\n\nMocht u al betaald hebben, verzoeken wij u dit bericht te negeren.\n\nMet vriendelijke groet,\n${S.naam||''}\n${S.telefoon||''}\n${S.email||''}`.trim();
+
+    await verstuurEmail({
+      type:        'herinnering',
+      factuur_id:  factuurId,
+      naar_email:  email,
+      naar_naam:   f.klant_naam,
+      pdf_base64:  pdfBase64,
+      bericht,
+    });
+    toast(`✅ Herinnering verstuurd naar ${email}`);
+  } catch(e){ toast('Fout bij verzenden: '+e.message,'err'); }
+}
+
+// PDF genereren als base64 string (voor email bijlage)
+async function genereerPDFBase64(factuurId){
+  const f    = cachedFacturen.find(x=>x.id===factuurId);
+  if(!f) throw new Error('Factuur niet gevonden');
+  const regels = await dbGet('factuur_regels',`?select=*&factuur_id=eq.${factuurId}&order=id`);
+  const S    = await dbGet('bedrijven',`?select=*&id=eq.${huidigeBedrijfId}`);
+  const inst = Array.isArray(S)?S[0]:S;
+
+  // Tijdelijk de save methode vervangen
+  const {jsPDF} = window.jspdf;
+  const origSave = jsPDF.prototype.save;
+  let base64Result = null;
+  jsPDF.prototype.save = function(){ base64Result = this.output('datauristring'); };
+  genereerPDF(f, regels||[], inst||window._bedrijfInst||{});
+  jsPDF.prototype.save = origSave;
+  return base64Result;
+}
+
+async function genereerOffertePDFBase64(offerteId){
+  const o    = cachedOffertes.find(x=>x.id===offerteId);
+  if(!o) throw new Error('Offerte niet gevonden');
+  const regels = await dbGet('offerte_regels',`?select=*&offerte_id=eq.${offerteId}&order=volgorde.asc`);
+  const S    = await dbGet('bedrijven',`?select=*&id=eq.${huidigeBedrijfId}`);
+  const inst = Array.isArray(S)?S[0]:S;
+
+  const {jsPDF} = window.jspdf;
+  const origSave = jsPDF.prototype.save;
+  let base64Result = null;
+  jsPDF.prototype.save = function(){ base64Result = this.output('datauristring'); };
+  genereerOffertePDF(o, regels||[], inst||window._bedrijfInst||{});
+  jsPDF.prototype.save = origSave;
+  return base64Result;
+}
+
+// ══════════════════════════════════════════════════════════
 //  OFFERTES
 // ══════════════════════════════════════════════════════════
 
@@ -3969,6 +4126,7 @@ function toonOffertes(data){
     <td><div style="font-family:Rajdhani,sans-serif;font-size:15px;font-weight:700;color:var(--text)">${eur(o.tot_incl)}</div></td>
     <td><div class="row-actions">
       <button class="btn btn-ghost btn-sm" onclick="downloadOffertePDF('${o.id}')">📄 PDF</button>
+      <button class="btn btn-ghost btn-sm" onclick="mailOfferte('${o.id}')" title="Mail naar klant">✉️ Versturen</button>
       <button class="btn btn-ghost btn-sm" onclick="wijzigOfferteStatus('${o.id}','verzonden')" title="Markeer als verzonden">📤</button>
       <button class="btn btn-ghost btn-sm" onclick="wijzigOfferteStatus('${o.id}','geaccepteerd')" title="Geaccepteerd">✅</button>
       <button class="btn btn-primary btn-sm" onclick="offerteNaarFactuur('${o.id}')" title="Omzetten naar factuur" ${o.status==='omgezet'?'disabled':''}>⚡ Factuur</button>
