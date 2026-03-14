@@ -352,21 +352,17 @@ tr:last-child td{border-bottom:none;}
       <input type="email" id="regEmail"   placeholder="E-mailadres" autocomplete="email">
       <input type="password" id="regPass" placeholder="Wachtwoord (min. 6 tekens)" autocomplete="new-password">
       <div class="auth-err" id="regErr"></div>
-      <button class="btn-auth" onclick="registreren()">Aanmelden →</button>
+      <button class="btn-auth" onclick="registreren()">Account aanmaken →</button>
+      <div style="text-align:center;margin-top:10px;font-size:12px;color:var(--text3)">
+        Je krijgt direct een gratis demo account. Upgrade later naar Pro via Stripe.
+      </div>
     </div>
 
-    <!-- WACHT OP GOEDKEURING -->
+    <!-- WACHT (niet meer actief, maar behouden voor terugwaartse compatibiliteit) -->
     <div id="wachtScherm" style="display:none;text-align:center;padding:10px 0">
       <div style="font-size:44px;margin-bottom:14px">⏳</div>
-      <div style="font-family:'Rajdhani',sans-serif;font-size:20px;font-weight:700;color:var(--text);margin-bottom:10px">Aanvraag ontvangen</div>
-      <div style="font-size:13px;color:var(--text3);line-height:1.7;margin-bottom:22px">
-        Je account wacht op goedkeuring van de beheerder.<br>
-        Je ontvangt een e-mail zodra je toegang hebt.
-      </div>
-      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;font-size:12px;color:var(--text3);margin-bottom:20px">
-        💡 Heb je al eerder een aanvraag ingediend en goedkeuring ontvangen?
-        <br>Probeer dan opnieuw in te loggen.
-      </div>
+      <div style="font-family:'Rajdhani',sans-serif;font-size:20px;font-weight:700;color:var(--text);margin-bottom:10px">Even geduld...</div>
+      <div style="font-size:13px;color:var(--text3);line-height:1.7;margin-bottom:22px">Je account wordt aangemaakt. Een moment...</div>
       <button style="background:none;border:1px solid var(--border);color:var(--text2);border-radius:8px;padding:9px 18px;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:13px;" onclick="toonAuthTab('login')">← Terug naar inloggen</button>
     </div>
 
@@ -410,8 +406,8 @@ tr:last-child td{border-bottom:none;}
     <div class="card" style="padding:0">
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Bedrijf</th><th>E-mail</th><th>Aangevraagd</th><th>Status</th><th>Actie</th></tr></thead>
-          <tbody id="adminTabel"><tr><td colspan="5"><div class="loading"><div class="spinner"></div></div></td></tr></tbody>
+          <thead><tr><th>Bedrijf</th><th>E-mail</th><th>Aangevraagd</th><th>Status</th><th>Abonnement</th><th>Actie</th></tr></thead>
+          <tbody id="adminTabel"><tr><td colspan="6"><div class="loading"><div class="spinner"></div></div></td></tr></tbody>
         </table>
       </div>
     </div>
@@ -1913,7 +1909,6 @@ async function verwerkIngelogdeGebruiker(user) {
   huidigGebruiker = user;
   const email = user.email || '';
 
-  const {data: statusData} = await rpc('mijn_goedkeuring_status');
   const {data: adminCheck} = await rpc('is_admin');
 
   document.getElementById('authScreen').style.display = 'none';
@@ -1925,23 +1920,20 @@ async function verwerkIngelogdeGebruiker(user) {
     return;
   }
 
-  if (statusData === 'goedgekeurd') {
+  // Iedereen met een account krijgt direct toegang (demo of pro)
+  await laadBedrijfId();
+  // Als er nog geen bedrijf is (eerste login), maak het aan
+  if (!huidigeBedrijfId) {
+    await rpc('keur_goed', {doel_user_id: user.id});
     await laadBedrijfId();
-    document.getElementById('app').classList.add('show');
-    document.getElementById('sidebarEmail').textContent = email;
-    document.getElementById('avatarLetter').textContent = (email[0]||'?').toUpperCase();
-    renderAll();
-    verwerkAbonnementUI();
-    selectPeriode('maand');
-    // Check terugkerende facturen bij inloggen
-    setTimeout(()=>checkEnMaakTerugkerendAan(false), 2000);
-  } else if (statusData === 'geweigerd') {
-    document.getElementById('authScreen').style.display = 'flex';
-    toonAuthTab('geweigerd');
-  } else {
-    document.getElementById('authScreen').style.display = 'flex';
-    toonAuthTab('wacht');
   }
+  document.getElementById('app').classList.add('show');
+  document.getElementById('sidebarEmail').textContent = email;
+  document.getElementById('avatarLetter').textContent = (email[0]||'?').toUpperCase();
+  renderAll();
+  verwerkAbonnementUI();
+  selectPeriode('maand');
+  setTimeout(()=>checkEnMaakTerugkerendAan(false), 2000);
 }
 
 async function registreren() {
@@ -1960,15 +1952,21 @@ async function registreren() {
     });
     const data = await res.json();
     if (!res.ok||data.error) { err.textContent=vertaalAuthFout(data.error_description||data.msg||'Registratie mislukt'); err.classList.add('show'); return; }
-    console.log('Signup response:', JSON.stringify(data).substring(0,200));
     const userId = data?.id || data?.user?.id;
     if (userId) {
+      // Registreer gebruiker en geef direct demo toegang (status = goedgekeurd)
       await fetch(`${SUPABASE_URL}/rest/v1/rpc/registreer_gebruiker`, {
         method:'POST', headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON},
         body: JSON.stringify({p_user_id: userId, p_email: email, p_bedrijfsnaam: bedrijf})
       });
     }
-    toonAuthTab('wacht');
+    // Direct inloggen na registratie
+    toast('✅ Account aangemaakt! Je wordt ingelogd...');
+    setTimeout(async ()=>{
+      document.getElementById('loginEmail').value = email;
+      document.getElementById('loginPass').value  = pass;
+      await inloggen();
+    }, 800);
   } catch(e) { err.textContent='Verbindingsfout: '+e.message; err.classList.add('show'); }
 }
 
@@ -2047,6 +2045,11 @@ async function filterAdmin(filter) {
   const alles = await res.json();
   if (!Array.isArray(alles)) { toast('Fout bij laden gebruikers', 'err'); return; }
 
+  // Haal ook abonnement status op per bedrijf
+  const bedrijven = await dbGet('bedrijven', `?select=user_id,abonnement_status,abonnement_periode`) || [];
+  const abMap = {};
+  (bedrijven||[]).forEach(b=>{ if(b.user_id) abMap[b.user_id]=b; });
+
   document.getElementById('adminStatWacht').textContent = alles.filter(u=>u.status==='wachtend').length;
   document.getElementById('adminStatGoed').textContent  = alles.filter(u=>u.status==='goedgekeurd').length;
   document.getElementById('adminStatWeig').textContent  = alles.filter(u=>u.status==='geweigerd').length;
@@ -2055,32 +2058,44 @@ async function filterAdmin(filter) {
   const tbody = document.getElementById('adminTabel');
 
   if (gefilterd.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="5"><div class="empty"><div class="empty-icon">${filter==='wachtend'?'⏳':'✅'}</div><div class="empty-text">Geen ${filter==='alles'?'gebruikers':filter}</div></div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6"><div class="empty"><div class="empty-icon">${filter==='wachtend'?'⏳':'✅'}</div><div class="empty-text">Geen ${filter==='alles'?'gebruikers':filter}</div></div></td></tr>`;
     return;
   }
 
   tbody.innerHTML = gefilterd.map(u => {
-    const datum = new Date(u.aangevraagd_op).toLocaleDateString('nl-NL', {day:'numeric',month:'short',year:'numeric'});
+    const datum  = new Date(u.aangevraagd_op).toLocaleDateString('nl-NL', {day:'numeric',month:'short',year:'numeric'});
+    const ab     = abMap[u.user_id];
+    const isPro  = ab?.abonnement_status === 'actief';
+    const isStripe = isPro && ab?.abonnement_periode !== 'admin';
+
     const statusBadge = u.status === 'goedgekeurd'
-      ? '<span class="badge badge-dienst">✅ Goedgekeurd</span>'
+      ? '<span class="badge badge-dienst">✅ Account actief</span>'
       : u.status === 'geweigerd'
       ? '<span class="badge" style="background:rgba(239,68,68,0.15);color:var(--red)">🚫 Geweigerd</span>'
       : '<span class="badge badge-marge">⏳ Wachtend</span>';
 
-    const acties = u.status === 'wachtend'
-      ? `<div class="row-actions">
-           <button class="btn btn-sm btn-green" onclick="keurGoed('${u.user_id}')">✅ Goedkeuren</button>
-           <button class="btn btn-danger btn-sm" onclick="weiger('${u.user_id}')">🚫 Weigeren</button>
-         </div>`
-      : u.status === 'goedgekeurd'
-      ? `<button class="btn btn-danger btn-sm" onclick="weiger('${u.user_id}')">🚫 Intrekken</button>`
-      : `<button class="btn btn-sm btn-green" onclick="keurGoed('${u.user_id}')">✅ Toch goedkeuren</button>`;
+    const abBadge = isPro
+      ? `<span class="badge badge-geaccepteerd">⭐ Pro${isStripe?' (Stripe)':' (Admin)'}</span>`
+      : `<span class="badge badge-concept">Demo</span>`;
+
+    const acties = `<div class="row-actions">
+      ${u.status==='wachtend'
+        ? `<button class="btn btn-sm btn-green" onclick="keurGoed('${u.user_id}')">✅ Goedkeuren + Pro</button>
+           <button class="btn btn-danger btn-sm" onclick="weiger('${u.user_id}')">🚫 Weigeren</button>`
+        : isPro && !isStripe
+          ? `<button class="btn btn-danger btn-sm" onclick="verwijderPro('${u.user_id}')">↩ Naar demo</button>`
+          : !isPro
+            ? `<button class="btn btn-sm btn-green" onclick="keurGoed('${u.user_id}')">⭐ Pro verlenen</button>`
+            : `<span style="font-size:11px;color:var(--text3)">Via Stripe</span>`
+      }
+    </div>`;
 
     return `<tr>
       <td style="color:var(--text);font-weight:500">${u.bedrijfsnaam||'—'}</td>
       <td style="font-size:13px">${u.email}</td>
       <td style="font-size:12px;color:var(--text3)">${datum}</td>
       <td>${statusBadge}</td>
+      <td>${abBadge}</td>
       <td>${acties}</td>
     </tr>`;
   }).join('');
@@ -2089,7 +2104,32 @@ async function filterAdmin(filter) {
 async function keurGoed(userId) {
   const {error} = await rpc('keur_goed', {doel_user_id: userId});
   if (error) { toast('Fout: '+JSON.stringify(error), 'err'); return; }
-  toast('✅ Gebruiker goedgekeurd');
+  // Upgrade naar pro zonder betaling
+  const bedrijfData = await dbGet('bedrijven', `?user_id=eq.${userId}&select=id`);
+  const bedrijfId   = Array.isArray(bedrijfData) ? bedrijfData[0]?.id : bedrijfData?.id;
+  if (bedrijfId) {
+    const geldigTot = new Date(new Date().setFullYear(new Date().getFullYear()+10)).toISOString();
+    await fetch(`${SUPABASE_URL}/rest/v1/bedrijven?id=eq.${bedrijfId}`, {
+      method:'PATCH',
+      headers: authHeaders({'Prefer':'return=minimal'}),
+      body: JSON.stringify({abonnement_status:'actief', abonnement_periode:'admin', abonnement_geldig_tot: geldigTot})
+    });
+  }
+  toast('✅ Gebruiker goedgekeurd en Pro toegang verleend');
+  filterAdmin(adminFilter);
+}
+
+async function verwijderPro(userId) {
+  const bedrijfData = await dbGet('bedrijven', `?user_id=eq.${userId}&select=id`);
+  const bedrijfId   = Array.isArray(bedrijfData) ? bedrijfData[0]?.id : bedrijfData?.id;
+  if (bedrijfId) {
+    await fetch(`${SUPABASE_URL}/rest/v1/bedrijven?id=eq.${bedrijfId}`, {
+      method:'PATCH',
+      headers: authHeaders({'Prefer':'return=minimal'}),
+      body: JSON.stringify({abonnement_status:'demo'})
+    });
+  }
+  toast('Pro toegang ingetrokken — terug naar demo');
   filterAdmin(adminFilter);
 }
 
