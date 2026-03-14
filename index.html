@@ -1452,6 +1452,50 @@ tr:last-child td{border-bottom:none;}
   </div>
 </div>
 
+<!-- MODAL: Betaling registreren -->
+<div class="modal-backdrop" id="modalBetaling">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="betalingTitel">Betaling registreren</div>
+
+    <div id="betalingInfo" style="background:var(--bg3);border-radius:10px;padding:12px;margin-bottom:16px;font-size:13px;color:var(--text2)"></div>
+
+    <div class="form-grid">
+      <div class="form-group"><label>Datum ontvangst</label><input id="betDatum" type="date"></div>
+      <div class="form-group" id="betBedragVeld">
+        <label id="betBedragLabel">Bedrag ontvangen</label>
+        <input id="betBedrag" type="number" step="0.01" placeholder="0.00">
+      </div>
+    </div>
+
+    <div class="form-group"><label>Omschrijving <span style="color:var(--text3);font-weight:400">optioneel</span></label>
+      <input id="betOmschrijving" placeholder="Bijv. Betaling factuur F0001">
+    </div>
+
+    <!-- Via kas: altijd boeking -->
+    <div id="betKasInfo" style="display:none;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:8px;padding:10px;font-size:13px;color:var(--green);margin-bottom:12px">
+      💵 Er wordt automatisch een boeking aangemaakt in het kasboek.
+    </div>
+
+    <!-- Via bank: optie om te koppelen -->
+    <div id="betBankInfo" style="display:none">
+      <div style="background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.2);border-radius:8px;padding:10px;font-size:13px;color:#60a5fa;margin-bottom:10px">
+        🏦 Koppel aan een bestaande bankmutatie, of registreer zonder koppeling.
+      </div>
+      <div class="form-group"><label>Koppelen aan bankmutatie <span style="color:var(--text3);font-weight:400">optioneel</span></label>
+        <select id="betBankMutatie">
+          <option value="">— Geen koppeling —</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:10px;margin-top:16px">
+      <button class="btn btn-primary" id="betOpslaanBtn" onclick="slaBetalingOp()">💾 Betaling registreren</button>
+      <button class="btn btn-sec" onclick="closeModal('modalBetaling')">Annuleren</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: Onboarding -->
 <div class="modal-backdrop" id="modalOnboarding" style="z-index:9999">
   <div class="modal" style="max-width:560px;padding:0;overflow:hidden">
@@ -2894,9 +2938,11 @@ function renderFactuurRijen(data){
         <div style="font-size:11px;color:var(--text3)">BTW: ${eur(f.tot_btw)}</div></td>
     <td>
       <span class="badge ${BETAAL_BADGE[bs]||'badge-concept'}">${BETAAL_LABEL[bs]||bs}</span>
+      ${f.betaald_bedrag&&bs==='deels'?`<div style="font-size:11px;color:var(--text3)">€${(+f.betaald_bedrag).toFixed(2).replace('.',',')} ontvangen</div>`:''}
       <div style="margin-top:5px;display:flex;gap:4px;flex-wrap:wrap">
-        ${bs!=='betaald'  ?`<button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 7px" onclick="setBetaalStatus('${f.id}','betaald')">✅ Betaald</button>`:''}
-        ${bs!=='deels'    ?`<button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 7px" onclick="setBetaalStatus('${f.id}','deels')">💶 Deels</button>`:''}
+        ${bs!=='betaald'  ?`<button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 7px" onclick="openBetaalModal('${f.id}','kas')">💵 Kas</button>
+                           <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 7px" onclick="openBetaalModal('${f.id}','bank')">🏦 Bank</button>
+                           <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 7px" onclick="openBetaalModal('${f.id}','deels')">💶 Deels</button>`:''}
         ${bs!=='onbetaald'?`<button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 7px" onclick="setBetaalStatus('${f.id}','onbetaald')">↩ Reset</button>`:''}
       </div>
     </td>
@@ -2912,13 +2958,150 @@ function renderFactuurRijen(data){
   }).join('');
 }
 
+let _betaalFactuurId  = null;
+let _betaalMethode    = null; // 'kas' | 'bank' | 'deels'
+
+async function openBetaalModal(factuurId, methode){
+  const f = cachedFacturen.find(x=>x.id===factuurId);
+  if(!f) return;
+  _betaalFactuurId = factuurId;
+  _betaalMethode   = methode;
+
+  const isDeels = methode === 'deels';
+  const isKas   = methode === 'kas';
+  const isBank  = methode === 'bank';
+
+  // Titel
+  document.getElementById('betalingTitel').textContent =
+    isDeels ? 'Deelbetaling registreren' :
+    isKas   ? 'Betaling via kas registreren' :
+              'Betaling via bank registreren';
+
+  // Info blok
+  document.getElementById('betalingInfo').innerHTML =
+    `<b>${f.klant_naam}</b> · Factuur ${f.nr} · Totaal: ${eur(f.tot_incl)}` +
+    (f.betaald_bedrag ? `<br>Al ontvangen: €${(+f.betaald_bedrag).toFixed(2).replace('.',',')}` : '');
+
+  // Datum
+  document.getElementById('betDatum').value = new Date().toISOString().split('T')[0];
+
+  // Bedrag
+  const resterend = round2((+f.tot_incl||0) - (+f.betaald_bedrag||0));
+  document.getElementById('betBedrag').value = resterend > 0 ? resterend : f.tot_incl;
+  document.getElementById('betBedragLabel').textContent = isDeels ? 'Bedrag ontvangen' : 'Bedrag (volledig)';
+  document.getElementById('betBedragVeld').style.display = 'block';
+
+  // Omschrijving
+  document.getElementById('betOmschrijving').value = `Betaling ${f.nr} - ${f.klant_naam}`;
+
+  // Toon juiste info blok
+  document.getElementById('betKasInfo').style.display  = isKas  ? 'block':'none';
+  document.getElementById('betBankInfo').style.display = isBank ? 'block':'none';
+
+  // Bank mutaties laden voor koppeling
+  if(isBank){
+    const mutaties = (cachedKasMutaties||[])
+      .filter(m=>m.rekening==='bank' && m.type==='bij' && !m.factuur_id)
+      .sort((a,b)=>b.datum.localeCompare(a.datum));
+    const sel = document.getElementById('betBankMutatie');
+    sel.innerHTML = '<option value="">— Geen koppeling —</option>';
+    mutaties.forEach(m=>{
+      const o = document.createElement('option');
+      o.value = m.id;
+      o.textContent = `${new Date(m.datum).toLocaleDateString('nl-NL')} · ${m.omschrijving.substring(0,40)} · €${(+m.bedrag).toFixed(2)}`;
+      // Auto-match op bedrag
+      if(Math.abs(+m.bedrag - +f.tot_incl) < 0.02) o.selected = true;
+      sel.appendChild(o);
+    });
+  }
+
+  openModal('modalBetaling');
+}
+
+async function slaBetalingOp(){
+  const f = cachedFacturen.find(x=>x.id===_betaalFactuurId);
+  if(!f) return;
+
+  const datum       = document.getElementById('betDatum').value;
+  const bedrag      = +document.getElementById('betBedrag').value||0;
+  const omschrijving= document.getElementById('betOmschrijving').value.trim();
+  const isDeels     = _betaalMethode === 'deels';
+  const isKas       = _betaalMethode === 'kas';
+  const isBank      = _betaalMethode === 'bank';
+
+  if(!datum)  return toast('Vul een datum in','err');
+  if(!bedrag) return toast('Vul een bedrag in','err');
+
+  const volledigBetaald = round2(bedrag) >= round2(+f.tot_incl - (+f.betaald_bedrag||0)) || !isDeels;
+  const nieuwBetaaldBedrag = round2((+f.betaald_bedrag||0) + bedrag);
+  const nieuweStatus = isDeels && nieuwBetaaldBedrag < +f.tot_incl ? 'deels' : 'betaald';
+
+  try {
+    // Update factuur betaalstatus
+    await dbUpdate('facturen', `?id=eq.${_betaalFactuurId}`, {
+      betaal_status:  nieuweStatus,
+      betaald_bedrag: round2(Math.min(nieuwBetaaldBedrag, +f.tot_incl)),
+    });
+
+    // Bij kas: automatisch kasboek boeking
+    if(isKas){
+      await dbInsert('kas_mutaties', {
+        bedrijf_id:   huidigeBedrijfId,
+        datum, rekening: 'kas', type: 'bij',
+        bedrag:       round2(bedrag),
+        omschrijving: omschrijving || `Betaling ${f.nr} - ${f.klant_naam}`,
+        categorie:    'Verkoop',
+        bron:         'factuur',
+        referentie_id: _betaalFactuurId,
+      });
+      toast(`✅ Betaling geregistreerd + kasboek bijgewerkt`);
+    }
+
+    // Bij bank: koppel aan mutatie indien geselecteerd
+    if(isBank){
+      const mutatieId = document.getElementById('betBankMutatie').value;
+      if(mutatieId){
+        await dbUpdate('kas_mutaties', `?id=eq.${mutatieId}`, {
+          referentie_id: _betaalFactuurId,
+          omschrijving:  omschrijving || `Betaling ${f.nr} - ${f.klant_naam}`,
+        });
+        toast(`✅ Betaling geregistreerd + gekoppeld aan bankmutatie`);
+      } else {
+        // Geen bestaande mutatie — maak nieuwe aan
+        await dbInsert('kas_mutaties', {
+          bedrijf_id:   huidigeBedrijfId,
+          datum, rekening: 'bank', type: 'bij',
+          bedrag:       round2(bedrag),
+          omschrijving: omschrijving || `Betaling ${f.nr} - ${f.klant_naam}`,
+          categorie:    'Verkoop',
+          bron:         'factuur',
+          referentie_id: _betaalFactuurId,
+        });
+        toast(`✅ Betaling geregistreerd in kasboek`);
+      }
+    }
+
+    if(isDeels) toast(`💶 Deelbetaling €${bedrag.toFixed(2)} geregistreerd`);
+
+    closeModal('modalBetaling');
+    // Herlaad data
+    const f2 = cachedFacturen.find(x=>x.id===_betaalFactuurId);
+    if(f2){ f2.betaal_status = nieuweStatus; f2.betaald_bedrag = round2(Math.min(nieuwBetaaldBedrag,+f.tot_incl)); }
+    renderBetaalStats(cachedFacturen);
+    filterFacturen();
+    // Herlaad kas/bank cache
+    cachedKasMutaties = await dbGet('kas_mutaties', `?select=*&bedrijf_id=eq.${huidigeBedrijfId}&order=datum.asc,aangemaakt_op.asc`) || [];
+
+  } catch(e){ toast('Fout: '+e.message,'err'); }
+}
+
 async function setBetaalStatus(id, status){
-  await dbUpdate('facturen',`?id=eq.${id}`,{betaal_status: status});
+  await dbUpdate('facturen',`?id=eq.${id}`,{betaal_status: status, betaald_bedrag: status==='onbetaald'?0:null});
   const f = cachedFacturen.find(x=>x.id===id);
-  if(f) f.betaal_status = status;
+  if(f){ f.betaal_status = status; if(status==='onbetaald') f.betaald_bedrag=0; }
   renderBetaalStats(cachedFacturen);
   filterFacturen();
-  toast(status==='betaald'?'✅ Gemarkeerd als betaald': status==='deels'?'💶 Deels betaald':'↩ Teruggezet naar onbetaald');
+  toast('↩ Teruggezet naar onbetaald');
 }
 
 async function renderFacturen(){
@@ -3721,39 +3904,6 @@ async function rdwLookup(kenteken){
     status.textContent = '⚠️ fout bij ophalen';
     status.style.color = '#f87171';
   }
-}
-async function mailFactuurKlant(factuurId){
-  const f = cachedFacturen.find(x=>x.id===factuurId);
-  if(!f) return;
-  const S = window._bedrijfInst||{};
-  const email = prompt('E-mailadres klant:', f.klant_email||'');
-  if(!email) return;
-  const onderwerp = encodeURIComponent(`Factuur ${f.nr} - ${S.naam||'Factuur'}`);
-  const datum = new Date(f.datum).toLocaleDateString('nl-NL');
-  const body = encodeURIComponent(
-    `Geachte ${f.klant_naam},\n\nHierbij ontvangt u factuur ${f.nr} d.d. ${datum} ten bedrage van ${eur(f.tot_incl)}.\n\nU kunt de factuur downloaden via de bijgevoegde PDF.\n\n` +
-    (S.iban ? `Wij verzoeken u het bedrag over te maken op ${S.iban} o.v.v. ${f.nr}.\n\n` : '') +
-    `Met vriendelijke groet,\n${S.naam||''}\n${S.telefoon||''}\n${S.email||''}`
-  );
-  // Download PDF eerst
-  await downloadPDF(factuurId);
-  // Open mail client
-  window.location.href = `mailto:${email}?subject=${onderwerp}&body=${body}`;
-}
-
-async function mailFactuurBoekhouder(factuurId){
-  const f = cachedFacturen.find(x=>x.id===factuurId);
-  if(!f) return;
-  const S = window._bedrijfInst||{};
-  const boekhouder = S.boekhouder_email;
-  if(!boekhouder) return toast('Geen boekhouder e-mailadres ingesteld','err');
-  const onderwerp = encodeURIComponent(`Factuur ${f.nr} - ${f.klant_naam} - ${eur(f.tot_incl)}`);
-  const datum = new Date(f.datum).toLocaleDateString('nl-NL');
-  const body = encodeURIComponent(
-    `Beste,\n\nBijgaand factuur ${f.nr} d.d. ${datum}.\n\nKlant: ${f.klant_naam}\nBedrag: ${eur(f.tot_incl)}${f.tot_btw>0?`\nBTW: ${eur(f.tot_btw)}`:''}${f.kenteken?`\nKenteken: ${f.kenteken}`:''}\n\nMet vriendelijke groet,\n${S.naam||''}`
-  );
-  await downloadPDF(factuurId);
-  window.location.href = `mailto:${boekhouder}?subject=${onderwerp}&body=${body}`;
 }
 // ══════════════════════════════════════════════════════════
 //  EMAIL VERZENDING VIA BREVO
@@ -5523,6 +5673,8 @@ function renderKasRijen(data){
     <td style="font-weight:700;color:${m.saldo>=0?'var(--text1)':'var(--red)'}">${(m.saldo<0?'-':'') + eur(m.saldo)}</td>
     <td><div class="row-actions">
       <button class="btn btn-ghost btn-sm" onclick="bewerkKasMutatie('${m.id}')">✏️</button>
+      ${m.type==='bij'&&!m.referentie_id?`<button class="btn btn-ghost btn-sm" style="font-size:10px" onclick="koppelMutatieAanFactuur('${m.id}')" title="Koppelen aan factuur">🔗</button>`:''}
+      ${m.referentie_id?`<span style="font-size:10px;color:var(--text3)">🔗 Factuur</span>`:''}
       <button class="btn btn-danger btn-sm" onclick="verwijderKasMutatie('${m.id}')">✕</button>
     </div></td>
   </tr>`).join('');
@@ -5541,6 +5693,33 @@ async function bewerkKasMutatie(id){
   document.getElementById('kmCategorie').value    = m.categorie||'';
   updateKmBedragLabel();
   openModal('modalKasMutatie');
+}
+
+async function koppelMutatieAanFactuur(mutatieId){
+  // Toon lijst van onbetaalde facturen
+  const onbetaald = cachedFacturen.filter(f=>f.betaal_status!=='betaald');
+  if(!onbetaald.length){ toast('Geen onbetaalde facturen','err'); return; }
+
+  const opties = onbetaald.map(f=>`${f.nr} - ${f.klant_naam} (${eur(f.tot_incl)})`).join('\n');
+  const keuze  = prompt(`Koppel aan factuur:\n\n${opties}\n\nVoer factuurnummer in:`);
+  if(!keuze) return;
+
+  const factuur = onbetaald.find(f=>f.nr.toLowerCase()===keuze.toLowerCase().trim());
+  if(!factuur){ toast('Factuur niet gevonden','err'); return; }
+
+  await dbUpdate('kas_mutaties', `?id=eq.${mutatieId}`, { referentie_id: factuur.id });
+  await dbUpdate('facturen', `?id=eq.${factuur.id}`, {
+    betaal_status:  'betaald',
+    betaald_bedrag: factuur.tot_incl,
+  });
+  const f2 = cachedFacturen.find(x=>x.id===factuur.id);
+  if(f2){ f2.betaal_status='betaald'; f2.betaald_bedrag=factuur.tot_incl; }
+
+  cachedKasMutaties = await dbGet('kas_mutaties',`?select=*&bedrijf_id=eq.${huidigeBedrijfId}&order=datum.asc,aangemaakt_op.asc`)||[];
+  renderBetaalStats(cachedFacturen);
+  filterFacturen();
+  filterKas();
+  toast(`✅ Gekoppeld aan ${factuur.nr} — factuur gemarkeerd als betaald`);
 }
 
 async function verwijderKasMutatie(id){
