@@ -112,6 +112,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .plan-btn-pro:hover { opacity:.88; }
 .demo-top-bar { background:linear-gradient(90deg,#F97316,#ea580c); color:#fff; text-align:center; padding:7px 16px; font-size:13px; font-weight:600; }
 .demo-top-bar a { color:#fff; text-decoration:underline; cursor:pointer; margin-left:8px; }
+.onboarding-dot { width:8px; height:8px; border-radius:50%; background:var(--border); transition:.2s; cursor:pointer; }
+.onboarding-dot.active { background:var(--accent); transform:scale(1.2); }
 
 /* BOTTOM NAV (mobile) */
 .bottom-nav {
@@ -1450,6 +1452,27 @@ tr:last-child td{border-bottom:none;}
   </div>
 </div>
 
+<!-- MODAL: Onboarding -->
+<div class="modal-backdrop" id="modalOnboarding" style="z-index:9999">
+  <div class="modal" style="max-width:560px;padding:0;overflow:hidden">
+
+    <!-- Progress bar -->
+    <div style="height:3px;background:var(--bg3)">
+      <div id="onboardingProgress" style="height:3px;background:var(--accent);transition:width .3s;width:20%"></div>
+    </div>
+
+    <!-- Stap inhoud -->
+    <div style="padding:28px 24px 20px" id="onboardingInhoud"></div>
+
+    <!-- Navigatie -->
+    <div style="padding:0 24px 20px;display:flex;justify-content:space-between;align-items:center">
+      <button id="onboardingVorigeBtn" class="btn btn-ghost btn-sm" onclick="onboardingStap(-1)" style="visibility:hidden">← Vorige</button>
+      <div style="display:flex;gap:6px" id="onboardingDots"></div>
+      <button id="onboardingVolgendeBtn" class="btn btn-primary btn-sm" onclick="onboardingStap(1)">Volgende →</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: Uren invoeren -->
 <div class="modal-backdrop" id="modalUren">
   <div class="modal" style="max-width:560px">
@@ -1935,6 +1958,8 @@ async function verwerkIngelogdeGebruiker(user) {
   verwerkAbonnementUI();
   selectPeriode('maand');
   setTimeout(()=>checkEnMaakTerugkerendAan(false), 2000);
+  // Onboarding bij eerste login
+  setTimeout(()=>checkOnboarding(), 500);
 }
 
 async function registreren() {
@@ -4590,6 +4615,121 @@ function bekijkInkoopBijlage(id){
   }
 }
 
+
+// ══════════════════════════════════════════════════════════
+//  ONBOARDING
+// ══════════════════════════════════════════════════════════
+
+const ONBOARDING_STAPPEN = [
+  {
+    icon: '👋',
+    titel: 'Welkom bij Slimmer Factureren!',
+    tekst: 'Fijn dat je erbij bent. In een paar stappen laten we je zien hoe je het meeste uit de app haalt.',
+    actie: null,
+  },
+  {
+    icon: '🏢',
+    titel: 'Stel je bedrijfsgegevens in',
+    tekst: 'Ga naar <b>Instellingen</b> om je bedrijfsnaam, adres, KVK, BTW-nummer en IBAN in te vullen. Deze gegevens verschijnen automatisch op al je facturen.',
+    actie: { label: 'Naar instellingen', tab: 'instellingen' },
+  },
+  {
+    icon: '📄',
+    titel: 'Maak je eerste factuur',
+    tekst: 'Klik op <b>Nieuwe Factuur</b> om direct aan de slag te gaan. Kies een factuurtype, vul de klantgegevens in en voeg regels toe.',
+    actie: { label: 'Factuur aanmaken', tab: 'factuur' },
+  },
+  {
+    icon: '👥',
+    titel: 'Beheer je klanten',
+    tekst: 'Sla klanten op zodat je ze snel kunt selecteren bij een nieuwe factuur. Je klantenlijst groeit automatisch mee.',
+    actie: { label: 'Naar klanten', tab: 'klanten' },
+  },
+  {
+    icon: '📊',
+    titel: 'Bekijk je dashboard',
+    tekst: 'Het dashboard toont je omzet, BTW per kwartaal, kas- en banksaldo en een resultatenrekening. Alles op één plek.',
+    actie: { label: 'Naar dashboard', tab: 'dashboard' },
+  },
+  {
+    icon: '⭐',
+    titel: 'Demo account — 5 facturen gratis',
+    tekst: 'Je hebt nu een gratis demo account met maximaal 5 facturen. Upgrade naar Pro voor onbeperkt gebruik, geen watermerk en alle functies.',
+    actie: { label: 'Bekijk Pro plannen', tab: 'upgrade' },
+  },
+];
+
+let _onboardingHuidig = 0;
+
+function checkOnboarding(){
+  const key = `onboarding_done_${huidigeBedrijfId}`;
+  if(localStorage.getItem(key)) return;
+  _onboardingHuidig = 0;
+  document.getElementById('modalOnboarding').classList.add('open');
+  renderOnboardingStap();
+}
+
+function renderOnboardingStap(){
+  const stap  = ONBOARDING_STAPPEN[_onboardingHuidig];
+  const totaal= ONBOARDING_STAPPEN.length;
+  const pct   = Math.round((_onboardingHuidig+1)/totaal*100);
+
+  document.getElementById('onboardingProgress').style.width = pct+'%';
+
+  // Dots
+  document.getElementById('onboardingDots').innerHTML = ONBOARDING_STAPPEN.map((_,i)=>
+    `<div class="onboarding-dot ${i===_onboardingHuidig?'active':''}" onclick="onboardingNaarStap(${i})"></div>`
+  ).join('');
+
+  // Vorige knop
+  const vorigeBtn = document.getElementById('onboardingVorigeBtn');
+  vorigeBtn.style.visibility = _onboardingHuidig > 0 ? 'visible' : 'hidden';
+
+  // Volgende / afronden knop
+  const volgendeBtn = document.getElementById('onboardingVolgendeBtn');
+  const isLaatste   = _onboardingHuidig === totaal-1;
+  volgendeBtn.textContent = isLaatste ? '✅ Aan de slag!' : 'Volgende →';
+
+  // Inhoud
+  document.getElementById('onboardingInhoud').innerHTML = `
+    <div style="text-align:center;margin-bottom:18px">
+      <div style="font-size:52px;margin-bottom:12px">${stap.icon}</div>
+      <div style="font-family:'Rajdhani',sans-serif;font-size:22px;font-weight:700;color:var(--text1);margin-bottom:10px">${stap.titel}</div>
+      <div style="font-size:14px;color:var(--text2);line-height:1.7">${stap.tekst}</div>
+    </div>
+    ${stap.actie ? `
+      <button class="btn btn-ghost btn-sm" style="width:100%;margin-top:4px" onclick="onboardingActie('${stap.actie.tab}')">
+        ${stap.actie.label} →
+      </button>` : ''}
+    <div style="text-align:center;margin-top:14px">
+      <button style="background:none;border:none;color:var(--text3);font-size:12px;cursor:pointer" onclick="sluitOnboarding()">
+        Overslaan
+      </button>
+    </div>`;
+}
+
+function onboardingStap(richting){
+  const nieuw = _onboardingHuidig + richting;
+  if(nieuw < 0) return;
+  if(nieuw >= ONBOARDING_STAPPEN.length){ sluitOnboarding(); return; }
+  _onboardingHuidig = nieuw;
+  renderOnboardingStap();
+}
+
+function onboardingNaarStap(i){
+  _onboardingHuidig = i;
+  renderOnboardingStap();
+}
+
+function onboardingActie(tab){
+  sluitOnboarding();
+  showTab(tab);
+}
+
+function sluitOnboarding(){
+  document.getElementById('modalOnboarding').classList.remove('open');
+  localStorage.setItem(`onboarding_done_${huidigeBedrijfId}`, '1');
+}
 
 // ══════════════════════════════════════════════════════════
 //  BACKUP
