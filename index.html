@@ -2122,7 +2122,7 @@ dbAuth.auth.onAuthStateChange(async (event, session) => {
 });
 
 async function laadBedrijfId() {
-  const data = await dbGet('bedrijven', `?select=id,standaard_btw_type,standaard_btw_perc,factuur_prefix,factuur_volgnr,boekhouder_email,abonnement_status,stripe_customer_id,stripe_subscription_id,abonnement_periode,abonnement_geldig_tot&user_id=eq.${huidigGebruiker.id}`);
+  const data = await dbGet('bedrijven', `?select=*&user_id=eq.${huidigGebruiker.id}`);
   const bedrijf = Array.isArray(data) ? data[0] : data;
   huidigeBedrijfId = bedrijf?.id || null;
   window._bedrijfInst = bedrijf || {};
@@ -3557,6 +3557,7 @@ async function slaInstellingenOp(){
       toast('✅ Instellingen + wachtwoord opgeslagen'); return;
     }
     toast('✅ Instellingen opgeslagen');
+    await laadBedrijfId();
   } catch(e){ toast('Fout bij opslaan: '+e.message,'err'); }
 }
 
