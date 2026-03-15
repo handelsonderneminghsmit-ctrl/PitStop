@@ -1235,76 +1235,142 @@ const dbAuth = createClient(SUPABASE_URL, SUPABASE_ANON, {
 
     <!-- UPGRADE -->
     <section id="upgrade">
-      <div id="demoBanner" style="display:none;background:linear-gradient(135deg,#F97316,#ea580c);color:#fff;padding:14px 20px;border-radius:12px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
-        <div>
-          <div style="font-weight:700;font-size:15px">⭐ Demo account</div>
-          <div style="font-size:13px;opacity:.9" id="demoBannerTekst">Je hebt nog 5 facturen beschikbaar in de demo.</div>
+
+      <!-- PRO WEERGAVE -->
+      <div id="proScherm" style="display:none">
+        <div class="page-header">
+          <div class="page-title">Mijn <span>Abonnement</span></div>
         </div>
-        <button onclick="showTab('upgrade')" style="background:rgba(255,255,255,.2);border:1.5px solid rgba(255,255,255,.5);color:#fff;padding:8px 16px;border-radius:8px;font-weight:600;cursor:pointer">Upgraden →</button>
+
+        <!-- Status kaart -->
+        <div class="card" style="margin-bottom:16px">
+          <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+            <div style="width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#ea580c);display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0">⭐</div>
+            <div style="flex:1">
+              <div style="font-family:'Rajdhani',sans-serif;font-size:20px;font-weight:700;color:var(--text1)">Pro abonnement actief</div>
+              <div id="proAbonnementInfo" style="font-size:13px;color:var(--text3);margin-top:3px"></div>
+            </div>
+            <div style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);color:var(--green);padding:6px 14px;border-radius:8px;font-size:13px;font-weight:600">✅ Actief</div>
+          </div>
+        </div>
+
+        <!-- Functies grid -->
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-bottom:20px">
+          <div style="background:var(--bg3);border-radius:10px;padding:14px;display:flex;gap:10px;align-items:center">
+            <span style="font-size:20px">📄</span>
+            <div><div style="font-weight:600;font-size:13px">Onbeperkt facturen</div><div style="font-size:11px;color:var(--text3)">Geen limiet</div></div>
+          </div>
+          <div style="background:var(--bg3);border-radius:10px;padding:14px;display:flex;gap:10px;align-items:center">
+            <span style="font-size:20px">🚫</span>
+            <div><div style="font-weight:600;font-size:13px">Geen watermerk</div><div style="font-size:11px;color:var(--text3)">Professionele PDF</div></div>
+          </div>
+          <div style="background:var(--bg3);border-radius:10px;padding:14px;display:flex;gap:10px;align-items:center">
+            <span style="font-size:20px">📧</span>
+            <div><div style="font-weight:600;font-size:13px">E-mail versturen</div><div style="font-size:11px;color:var(--text3)">Via Brevo of eigen mail</div></div>
+          </div>
+          <div style="background:var(--bg3);border-radius:10px;padding:14px;display:flex;gap:10px;align-items:center">
+            <span style="font-size:20px">🔁</span>
+            <div><div style="font-weight:600;font-size:13px">Terugkerende facturen</div><div style="font-size:11px;color:var(--text3)">Automatisch</div></div>
+          </div>
+          <div style="background:var(--bg3);border-radius:10px;padding:14px;display:flex;gap:10px;align-items:center">
+            <span style="font-size:20px">📊</span>
+            <div><div style="font-weight:600;font-size:13px">Volledige rapportage</div><div style="font-size:11px;color:var(--text3)">BTW, resultaten, export</div></div>
+          </div>
+          <div style="background:var(--bg3);border-radius:10px;padding:14px;display:flex;gap:10px;align-items:center">
+            <span style="font-size:20px">🎨</span>
+            <div><div style="font-weight:600;font-size:13px">Logo & huisstijl</div><div style="font-size:11px;color:var(--text3)">Eigen uitstraling</div></div>
+          </div>
+        </div>
+
+        <!-- Acties -->
+        <div class="card">
+          <div class="card-title">Abonnementsbeheer</div>
+          <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:4px">
+            <button class="btn btn-primary" onclick="beheerAbonnement()">
+              <span style="margin-right:6px">⚙️</span> Abonnement beheren
+            </button>
+            <button class="btn btn-sec" onclick="factuurHistorie()">
+              <span style="margin-right:6px">🧾</span> Betalingshistorie
+            </button>
+          </div>
+          <div style="margin-top:12px;font-size:12px;color:var(--text3)">
+            Via de Stripe klantportal kun je je abonnement wijzigen, opzeggen of je betaalgegevens aanpassen.
+          </div>
+        </div>
       </div>
 
-      <div id="abonnementActief" style="display:none" class="card" style="margin-bottom:20px">
-        <div class="card-title">✅ Actief abonnement</div>
-        <div id="abonnementInfo" style="color:var(--text2);font-size:14px;margin-top:8px"></div>
-        <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap">
-          <button class="btn-sec" onclick="beheerAbonnement()">🔧 Beheer abonnement</button>
-          <button class="btn-sec" onclick="factuurHistorie()">🧾 Betalingshistorie</button>
+      <!-- DEMO WEERGAVE -->
+      <div id="demoScherm" style="display:none">
+        <div class="page-header">
+          <div class="page-title">Kies je <span>Abonnement</span></div>
         </div>
-      </div>
 
-      <div id="upgradeKaarten">
-        <div style="text-align:center;margin-bottom:28px">
-          <h2 style="color:var(--text1);font-size:22px;margin-bottom:6px">Kies je abonnement</h2>
-          <p style="color:var(--text3);font-size:14px">Onbeperkt facturen, geen watermerk, professioneel gebruik voor elk bedrijf</p>
-          <div style="display:inline-flex;background:var(--bg3);border-radius:10px;padding:4px;margin-top:12px;gap:2px">
+        <!-- Demo status -->
+        <div class="card" style="margin-bottom:20px;border-color:var(--accent)">
+          <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+            <div style="width:48px;height:48px;border-radius:50%;background:var(--bg3);border:2px solid var(--accent);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">🚀</div>
+            <div style="flex:1">
+              <div style="font-weight:700;font-size:16px;color:var(--text1)">Demo account</div>
+              <div id="demoStatusTekst" style="font-size:13px;color:var(--text3);margin-top:2px"></div>
+            </div>
+            <div style="background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.3);color:var(--accent);padding:6px 14px;border-radius:8px;font-size:13px;font-weight:600">Demo</div>
+          </div>
+          <!-- Demo voortgangsbalk -->
+          <div style="margin-top:14px">
+            <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text3);margin-bottom:6px">
+              <span>Facturen gebruikt</span>
+              <span id="demoProgressTekst">0 / 5</span>
+            </div>
+            <div style="background:var(--bg3);border-radius:4px;height:6px">
+              <div id="demoProgressBar" style="background:var(--accent);border-radius:4px;height:6px;width:0%;transition:.3s"></div>
+            </div>
+          </div>
+          <!-- Demo beperkingen -->
+          <div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <div style="font-size:12px;color:var(--text3)">⚠️ Watermerk op alle PDF's</div>
+            <div style="font-size:12px;color:var(--text3)">⚠️ Max 5 facturen totaal</div>
+            <div style="font-size:12px;color:var(--text3)">⚠️ Geen automatische email</div>
+            <div style="font-size:12px;color:var(--text3)">⚠️ Geen terugkerende facturen</div>
+          </div>
+        </div>
+
+        <!-- Periode keuze -->
+        <div style="text-align:center;margin-bottom:24px">
+          <p style="color:var(--text3);font-size:14px;margin-bottom:14px">Upgrade voor onbeperkt gebruik, geen watermerk en alle functies</p>
+          <div style="display:inline-flex;background:var(--bg3);border-radius:10px;padding:4px;gap:2px">
             <button id="periodBtn-maand"    class="period-btn active" onclick="selectPeriode('maand')">Maandelijks</button>
             <button id="periodBtn-kwartaal" class="period-btn"        onclick="selectPeriode('kwartaal')">Per kwartaal</button>
             <button id="periodBtn-jaar"     class="period-btn"        onclick="selectPeriode('jaar')">Jaarlijks</button>
           </div>
         </div>
 
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;max-width:900px;margin:0 auto">
-          <!-- Demo kaart -->
-          <div class="upgrade-card" id="planDemoCard">
-            <div class="plan-badge demo-badge">Huidig</div>
-            <div class="plan-icon">🚀</div>
-            <div class="plan-naam">Demo</div>
-            <div class="plan-prijs">Gratis</div>
-            <div class="plan-periode">altijd</div>
-            <ul class="plan-features">
-              <li>✅ Max 5 facturen</li>
-              <li>✅ Alle factuurtypen</li>
-              <li>✅ Kenteken opzoeken (voertuigen)</li>
-              <li>⚠️ Watermerk op PDF</li>
-              <li>❌ Onbeperkt facturen</li>
-            </ul>
-            <button class="plan-btn plan-btn-demo" disabled>Huidig plan</button>
-          </div>
-
-          <!-- Betaald plan -->
-          <div class="upgrade-card upgrade-card-featured" id="planBetaaldCard">
-            <div class="plan-badge featured-badge">⭐ Aanbevolen</div>
+        <!-- Pro plan kaart -->
+        <div style="max-width:420px;margin:0 auto">
+          <div class="upgrade-card upgrade-card-featured">
+            <div class="plan-badge featured-badge">⭐ Pro</div>
             <div class="plan-icon">💼</div>
-            <div class="plan-naam">Pro</div>
+            <div class="plan-naam">Pro abonnement</div>
             <div class="plan-prijs" id="planPrijs">—</div>
             <div class="plan-periode" id="planPeriode">per maand</div>
             <ul class="plan-features">
               <li>✅ Onbeperkt facturen</li>
-              <li>✅ Geen watermerk</li>
+              <li>✅ Geen watermerk op PDF</li>
               <li>✅ Alle factuurtypen</li>
-              <li>✅ Kenteken opzoeken (voertuigen)</li>
+              <li>✅ Automatische e-mail via Brevo</li>
+              <li>✅ Terugkerende facturen</li>
+              <li>✅ Kenteken opzoeken</li>
               <li>✅ Logo & huisstijl</li>
-              <li>✅ E-mail boekhouding</li>
-              <li>✅ Werkt voor elk bedrijf</li>
+              <li>✅ Volledige export & backup</li>
             </ul>
-            <button class="plan-btn plan-btn-pro" onclick="startCheckout()" id="checkoutBtn">Starten →</button>
+            <button class="plan-btn plan-btn-pro" onclick="startCheckout()" id="checkoutBtn">Nu upgraden →</button>
           </div>
         </div>
 
         <p style="text-align:center;color:var(--text3);font-size:12px;margin-top:20px">
-          Betaling via Stripe · Veilig · Opzegbaar per periode
+          Betaling via Stripe · Veilig · Per periode opzegbaar
         </p>
       </div>
+
     </section>
     <section id="instellingen">
       <div class="page-header"><div class="page-title">Bedrijfs<span>instellingen</span></div></div>
@@ -2311,8 +2377,14 @@ function showTab(id){
   if(id==='dashboard')    renderDashboard();
   if(id==='facturen')     { renderFacturen(); initPeriodeFilters(); }
   if(id==='offertes')     renderOffertes();
-  if(id==='uren')         renderUren();
-  if(id==='terugkerend')  renderTerugkerend();
+  if(id==='uren'){
+    if(isDemo()){ toast('Urenregistratie is alleen beschikbaar in Pro','err'); showTab('upgrade'); return; }
+    renderUren();
+  }
+  if(id==='terugkerend'){
+    if(isDemo()){ toast('Terugkerende facturen is alleen beschikbaar in Pro','err'); showTab('upgrade'); return; }
+    renderTerugkerend();
+  }
   if(id==='inkopen')      { renderInkopen(); initPeriodeFilters(); }
   if(id==='kasbank')      renderKasBank();
   if(id==='resultaten')   initResultaten();
@@ -2556,15 +2628,15 @@ function isDemo() {
 }
 
 async function verwerkAbonnementUI() {
-  const status = window._abonnementStatus || 'demo';
-  const isActief = status === 'actief';
+  const status  = window._abonnementStatus || 'demo';
+  const isActief= status === 'actief';
 
   // Demo topbar
   const topBar = document.getElementById('demoTopBar');
   if(topBar) topBar.style.display = isDemo() ? 'block' : 'none';
 
-  // Upgrade nav knop
-  const navBtn = document.getElementById('upgradeNavBtn');
+  // Nav knop
+  const navBtn   = document.getElementById('upgradeNavBtn');
   const navLabel = document.getElementById('upgradeNavLabel');
   if(navBtn){
     if(isActief){
@@ -2576,32 +2648,66 @@ async function verwerkAbonnementUI() {
     }
   }
 
-  if(isDemo()){
-    // Tel facturen
-    const facturen = await dbGet('facturen', `?select=id&bedrijf_id=eq.${huidigeBedrijfId}`);
-    const aantalF = Array.isArray(facturen) ? facturen.length : 0;
-    const resterend = Math.max(0, DEMO_MAX_FACTUREN - aantalF);
-    const tekst = resterend > 0
-      ? `${resterend} van ${DEMO_MAX_FACTUREN} demo-facturen resterend`
-      : `Demo limiet bereikt — upgrade voor onbeperkt gebruik`;
-    const el1 = document.getElementById('demoTopBarTekst');
-    if(el1) el1.textContent = tekst;
-  }
-
-  // Upgrade pagina kaarten
-  const demoCard = document.getElementById('planDemoCard');
-  if(demoCard) demoCard.style.display = isDemo() ? 'flex' : 'none';
-
-  const actBox = document.getElementById('abonnementActief');
-  if(actBox) actBox.style.display = isActief ? 'block' : 'none';
+  // Toon juiste scherm op upgrade pagina
+  const proScherm  = document.getElementById('proScherm');
+  const demoScherm = document.getElementById('demoScherm');
+  if(proScherm)  proScherm.style.display  = isActief ? 'block' : 'none';
+  if(demoScherm) demoScherm.style.display = isActief ? 'none'  : 'block';
 
   if(isActief){
-    const inst = window._bedrijfInst;
+    // Pro info
+    const inst      = window._bedrijfInst||{};
     const geldigTot = inst.abonnement_geldig_tot ? new Date(inst.abonnement_geldig_tot).toLocaleDateString('nl-NL') : '—';
-    const periode = inst.abonnement_periode || 'maand';
-    const el = document.getElementById('abonnementInfo');
-    if(el) el.innerHTML = `Actief Pro abonnement &nbsp;·&nbsp; <b>${periode}</b> plan &nbsp;·&nbsp; Geldig tot ${geldigTot}`;
+    const periodeLabels = {maand:'Maandelijks', kwartaal:'Per kwartaal', jaar:'Jaarlijks', admin:'Beheerder'};
+    const periode   = periodeLabels[inst.abonnement_periode] || inst.abonnement_periode || 'Pro';
+    const el = document.getElementById('proAbonnementInfo');
+    if(el) el.textContent = `${periode} · Geldig tot ${geldigTot}`;
   }
+
+  if(isDemo()){
+    // Tel facturen voor voortgangsbalk
+    const facturen = await dbGet('facturen', `?select=id&bedrijf_id=eq.${huidigeBedrijfId}`);
+    const aantalF  = Array.isArray(facturen) ? facturen.length : 0;
+    const resterend= Math.max(0, DEMO_MAX_FACTUREN - aantalF);
+    const pct      = Math.min(100, Math.round(aantalF/DEMO_MAX_FACTUREN*100));
+
+    const statusTekst = document.getElementById('demoStatusTekst');
+    const progressBar = document.getElementById('demoProgressBar');
+    const progressTekst=document.getElementById('demoProgressTekst');
+    const topBarTekst = document.getElementById('demoTopBarTekst');
+
+    if(statusTekst) statusTekst.textContent = resterend > 0
+      ? `Nog ${resterend} van ${DEMO_MAX_FACTUREN} facturen beschikbaar`
+      : `Limiet bereikt — upgrade voor onbeperkt gebruik`;
+    if(progressBar)  progressBar.style.width = pct+'%';
+    if(progressBar)  progressBar.style.background = pct>=100 ? 'var(--red)' : 'var(--accent)';
+    if(progressTekst)progressTekst.textContent = `${aantalF} / ${DEMO_MAX_FACTUREN}`;
+    if(topBarTekst)  topBarTekst.textContent = resterend > 0
+      ? `nog ${resterend} facturen beschikbaar`
+      : `limiet bereikt`;
+
+    // Demo beperkingen: verberg functies
+    beperkDemoFuncties();
+  } else {
+    // Pro: toon alles
+    herstelProFuncties();
+  }
+}
+
+function beperkDemoFuncties(){
+  // Terugkerende facturen tab uitschakelen
+  const trBtn = document.querySelector('.nav-btn[onclick*="terugkerend"]');
+  if(trBtn){ trBtn.style.opacity='.4'; trBtn.style.pointerEvents='none'; trBtn.title='Alleen beschikbaar in Pro'; }
+  // Uren tab uitschakelen
+  const uBtn = document.querySelector('.nav-btn[onclick*="\'uren\'"]');
+  if(uBtn){ uBtn.style.opacity='.4'; uBtn.style.pointerEvents='none'; uBtn.title='Alleen beschikbaar in Pro'; }
+}
+
+function herstelProFuncties(){
+  const trBtn = document.querySelector('.nav-btn[onclick*="terugkerend"]');
+  if(trBtn){ trBtn.style.opacity=''; trBtn.style.pointerEvents=''; trBtn.title=''; }
+  const uBtn = document.querySelector('.nav-btn[onclick*="\'uren\'"]');
+  if(uBtn){ uBtn.style.opacity=''; uBtn.style.pointerEvents=''; uBtn.title=''; }
 }
 
 async function checkDemoLimiet() {
