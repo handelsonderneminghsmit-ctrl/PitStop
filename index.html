@@ -1332,6 +1332,33 @@ tr:last-child td{border-bottom:none;}
           <div class="form-group"><label>Email adres boekhouder</label><input id="sBoekhouderEmail" type="email" placeholder="boekhouder@kantoor.nl"></div>
           <div style="font-size:12px;color:var(--text3);margin-top:4px">Als dit ingevuld is verschijnt er een knop bij elke factuur om deze direct naar de boekhouder te mailen.</div>
         </div>
+
+        <div class="sett-section">
+          <h3>E-mail verzendmethode</h3>
+          <div style="font-size:13px;color:var(--text2);margin-bottom:14px">Kies hoe facturen en offertes verstuurd worden als je op de mail-knop klikt.</div>
+
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <label style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;padding:14px;background:var(--bg3);border-radius:10px;border:2px solid transparent" id="methodeEigenLabel">
+              <input type="radio" name="emailMethode" id="sEmailMethodeEigen" value="eigen" style="margin-top:3px;accent-color:var(--accent)">
+              <div>
+                <div style="font-weight:600;font-size:14px">📬 Eigen mailprogramma</div>
+                <div style="font-size:12px;color:var(--text3);margin-top:3px">Opent je eigen mailprogramma (Outlook, Gmail, Apple Mail) met de PDF als bijlage klaar. Jij verstuurt zelf.</div>
+              </div>
+            </label>
+
+            <label style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;padding:14px;background:var(--bg3);border-radius:10px;border:2px solid transparent" id="methodeBrevoLabel">
+              <input type="radio" name="emailMethode" id="sEmailMethodeBrevo" value="brevo" style="margin-top:3px;accent-color:var(--accent)">
+              <div>
+                <div style="font-weight:600;font-size:14px">⚡ Via de software (Brevo)</div>
+                <div style="font-size:12px;color:var(--text3);margin-top:3px">De software verstuurt de email direct. De klant ontvangt de factuur als bijlage. Je hoeft zelf niets te doen.</div>
+              </div>
+            </label>
+          </div>
+
+          <div style="margin-top:12px;font-size:12px;color:var(--text3)">
+            💡 Bij beide opties blijven de mail-knoppen zichtbaar — het verschil is alleen hoe de email wordt verstuurd.
+          </div>
+        </div>
         <div class="sett-section">
           <h3>Factuurvoet</h3>
           <div class="form-group"><label>Standaard factuurtekst</label><textarea id="sTekst" placeholder="Betaling binnen 14 dagen. Neem contact op bij vragen."></textarea></div>
@@ -3097,6 +3124,16 @@ async function slaBetalingOp(){
 }
 
 async function setBetaalStatus(id, status){
+  // Bij terugzetten naar onbetaald: verwijder gekoppelde kas mutaties die via factuur zijn aangemaakt
+  if(status === 'onbetaald'){
+    const gekoppeld = (cachedKasMutaties||[]).filter(m=>m.referentie_id===id && m.bron==='factuur');
+    for(const m of gekoppeld){
+      await dbDelete('kas_mutaties',`?id=eq.${m.id}`);
+    }
+    if(gekoppeld.length){
+      cachedKasMutaties = cachedKasMutaties.filter(m=>!(m.referentie_id===id && m.bron==='factuur'));
+    }
+  }
   await dbUpdate('facturen',`?id=eq.${id}`,{betaal_status: status, betaald_bedrag: status==='onbetaald'?0:null});
   const f = cachedFacturen.find(x=>x.id===id);
   if(f){ f.betaal_status = status; if(status==='onbetaald') f.betaald_bedrag=0; }
@@ -3424,6 +3461,11 @@ async function laadInstellingenFormulier(){
   document.getElementById('sTekst').value    = data.factuur_tekst||'';
   document.getElementById('sAutoVoet').value = data.auto_voet||'Als gezien en bereden d.d.:\nGeen garantie\nFinale kwijting';
   document.getElementById('sAutoVoet').value = data.auto_voet||'Als gezien en bereden d.d.:\nGeen garantie\nFinale kwijting';
+  // Email methode
+  const methode = data.email_methode||'eigen';
+  document.getElementById('sEmailMethodeEigen').checked = methode === 'eigen';
+  document.getElementById('sEmailMethodeBrevo').checked = methode === 'brevo';
+  updateEmailMethodeBorder();
   document.getElementById('sFactuurPrefix').value = data.factuur_prefix||'F';
   document.getElementById('sFactuurStart').value  = data.factuur_volgnr||1;
   // Opmaak
@@ -3440,7 +3482,18 @@ async function laadInstellingenFormulier(){
   }
 }
 
-function verwerkLogo(input){
+function updateEmailMethodeBorder(){
+  const isBrevo = document.getElementById('sEmailMethodeBrevo')?.checked;
+  const eigenLabel = document.getElementById('methodeEigenLabel');
+  const brevoLabel = document.getElementById('methodeBrevoLabel');
+  if(eigenLabel) eigenLabel.style.borderColor = !isBrevo ? 'var(--accent)' : 'transparent';
+  if(brevoLabel) brevoLabel.style.borderColor  =  isBrevo ? 'var(--accent)' : 'transparent';
+}
+
+// Luister naar radio wijzigingen
+document.addEventListener('change', e=>{
+  if(e.target.name==='emailMethode') updateEmailMethodeBorder();
+});
   const file = input.files[0];
   if(!file) return;
   if(file.size > 1024*1024){ toast('Logo mag maximaal 1MB zijn','err'); return; }
@@ -3481,6 +3534,7 @@ async function slaInstellingenOp(){
     standaard_btw_perc: +document.getElementById('sStdBtwPerc').value,
     factuur_prefix: document.getElementById('sFactuurPrefix').value||'F',
     factuur_volgnr: +document.getElementById('sFactuurStart').value||1,
+    email_methode: document.getElementById('sEmailMethodeBrevo').checked ? 'brevo' : 'eigen',
   };
   if(window._logoBase64 !== undefined) updateData.logo_base64 = window._logoBase64;
 
@@ -3531,7 +3585,7 @@ async function downloadPDF(factuurId){
   genereerPDF(f, Array.isArray(regels)?regels:[], bedrijf);
 }
 
-function genereerPDF(f, regels, S){
+function genereerPDF(f, regels, S, modus='download'){
   const {jsPDF}=window.jspdf;
   const doc=new jsPDF();
   const PW=210, PH=297, ML=16, MR=194, CW=MR-ML;
@@ -3830,11 +3884,9 @@ function genereerPDF(f, regels, S){
     }
   }
 
+  if(modus === 'base64') return doc.output('datauristring');
   doc.save(`${f.nr}.pdf`);
 }
-
-// ══════════════════════════════════════════════════════════
-//  RDW API
 // ══════════════════════════════════════════════════════════
 let rdwTimer = null;
 function rdwDebounce(val){
@@ -3926,29 +3978,34 @@ async function verstuurEmail(payload){
 async function mailFactuurKlant(factuurId){
   const f = cachedFacturen.find(x=>x.id===factuurId);
   if(!f) return;
-  const S   = window._bedrijfInst||{};
-  const email = f.klant_email || prompt('E-mailadres klant:', '');
+  const S      = window._bedrijfInst||{};
+  const methode= S.email_methode||'eigen';
+  const email  = f.klant_email || prompt('E-mailadres klant:', '');
   if(!email) return;
 
-  toast('📧 Email wordt verstuurd...');
-  try {
-    // Genereer PDF als base64
-    const pdfBase64 = await genereerPDFBase64(factuurId);
+  if(methode === 'brevo'){
+    toast('📧 Email wordt verstuurd...');
+    try {
+      const pdfBase64 = await genereerPDFBase64(factuurId);
+      const datum = new Date(f.datum).toLocaleDateString('nl-NL');
+      const bericht = `Geachte ${f.klant_naam},\n\nHierbij ontvangt u factuur ${f.nr} d.d. ${datum} ten bedrage van ${eur(f.tot_incl)}.\n\n` +
+        (S.iban ? `Wij verzoeken u het bedrag over te maken op IBAN ${S.iban} o.v.v. ${f.nr}.\n\n` : '') +
+        `Met vriendelijke groet,\n${S.naam||''}\n${S.telefoon||''}\n${S.email||''}`.trim();
+      await verstuurEmail({ type:'factuur', factuur_id:factuurId, naar_email:email, naar_naam:f.klant_naam, pdf_base64:pdfBase64, bericht });
+      toast(`✅ Factuur ${f.nr} verstuurd naar ${email}`);
+    } catch(e){ toast('Fout bij verzenden: '+e.message,'err'); }
+  } else {
+    // Eigen mailprogramma — download PDF en open mailto
     const datum = new Date(f.datum).toLocaleDateString('nl-NL');
-    const bericht = `Geachte ${f.klant_naam},\n\nHierbij ontvangt u factuur ${f.nr} d.d. ${datum} ten bedrage van ${eur(f.tot_incl)}.\n\n` +
-      (S.iban ? `Wij verzoeken u het bedrag over te maken op IBAN ${S.iban} o.v.v. ${f.nr}.\n\n` : '') +
-      `Met vriendelijke groet,\n${S.naam||''}\n${S.telefoon||''}\n${S.email||''}`.trim();
-
-    await verstuurEmail({
-      type:        'factuur',
-      factuur_id:  factuurId,
-      naar_email:  email,
-      naar_naam:   f.klant_naam,
-      pdf_base64:  pdfBase64,
-      bericht,
-    });
-    toast(`✅ Factuur ${f.nr} verstuurd naar ${email}`);
-  } catch(e){ toast('Fout bij verzenden: '+e.message,'err'); }
+    const onderwerp = encodeURIComponent(`Factuur ${f.nr} - ${S.naam||'Factuur'}`);
+    const body = encodeURIComponent(
+      `Geachte ${f.klant_naam},\n\nHierbij ontvangt u factuur ${f.nr} d.d. ${datum} ten bedrage van ${eur(f.tot_incl)}.\n\n` +
+      (S.iban ? `Wij verzoeken u het bedrag over te maken op ${S.iban} o.v.v. ${f.nr}.\n\n` : '') +
+      `Met vriendelijke groet,\n${S.naam||''}\n${S.telefoon||''}\n${S.email||''}`
+    );
+    await downloadPDF(factuurId);
+    setTimeout(()=>{ window.location.href = `mailto:${email}?subject=${onderwerp}&body=${body}`; }, 1000);
+  }
 }
 
 async function mailFactuurBoekhouder(factuurId){
@@ -3957,24 +4014,23 @@ async function mailFactuurBoekhouder(factuurId){
   const S = window._bedrijfInst||{};
   const boekhouder = S.boekhouder_email;
   if(!boekhouder) return toast('Geen boekhouder e-mailadres ingesteld','err');
+  const methode = S.email_methode||'eigen';
+  const datum = new Date(f.datum).toLocaleDateString('nl-NL');
 
-  toast('📧 Email wordt verstuurd naar boekhouder...');
-  try {
-    const pdfBase64 = await genereerPDFBase64(factuurId);
-    const datum = new Date(f.datum).toLocaleDateString('nl-NL');
-    const bericht = `Beste,\n\nBijgaand factuur ${f.nr} d.d. ${datum}.\n\nKlant: ${f.klant_naam}\nBedrag: ${eur(f.tot_incl)}${f.tot_btw>0?`\nBTW: ${eur(f.tot_btw)}`:''}${f.kenteken?`\nKenteken: ${f.kenteken}`:''}\n\nMet vriendelijke groet,\n${S.naam||''}`.trim();
-
-    await verstuurEmail({
-      type:        'factuur',
-      factuur_id:  factuurId,
-      naar_email:  boekhouder,
-      naar_naam:   'Boekhouder',
-      pdf_base64:  pdfBase64,
-      onderwerp:   `Factuur ${f.nr} - ${f.klant_naam} - ${eur(f.tot_incl)}`,
-      bericht,
-    });
-    toast(`✅ Factuur ${f.nr} verstuurd naar boekhouder`);
-  } catch(e){ toast('Fout bij verzenden: '+e.message,'err'); }
+  if(methode === 'brevo'){
+    toast('📧 Email wordt verstuurd naar boekhouder...');
+    try {
+      const pdfBase64 = await genereerPDFBase64(factuurId);
+      const bericht = `Beste,\n\nBijgaand factuur ${f.nr} d.d. ${datum}.\n\nKlant: ${f.klant_naam}\nBedrag: ${eur(f.tot_incl)}${f.tot_btw>0?`\nBTW: ${eur(f.tot_btw)}`:''}${f.kenteken?`\nKenteken: ${f.kenteken}`:''}\n\nMet vriendelijke groet,\n${S.naam||''}`.trim();
+      await verstuurEmail({ type:'factuur', factuur_id:factuurId, naar_email:boekhouder, naar_naam:'Boekhouder', pdf_base64:pdfBase64, onderwerp:`Factuur ${f.nr} - ${f.klant_naam} - ${eur(f.tot_incl)}`, bericht });
+      toast(`✅ Factuur ${f.nr} verstuurd naar boekhouder`);
+    } catch(e){ toast('Fout bij verzenden: '+e.message,'err'); }
+  } else {
+    const onderwerp = encodeURIComponent(`Factuur ${f.nr} - ${f.klant_naam} - ${eur(f.tot_incl)}`);
+    const body = encodeURIComponent(`Beste,\n\nBijgaand factuur ${f.nr} d.d. ${datum}.\n\nKlant: ${f.klant_naam}\nBedrag: ${eur(f.tot_incl)}${f.tot_btw>0?`\nBTW: ${eur(f.tot_btw)}`:''}${f.kenteken?`\nKenteken: ${f.kenteken}`:''}\n\nMet vriendelijke groet,\n${S.naam||''}`);
+    await downloadPDF(factuurId);
+    setTimeout(()=>{ window.location.href = `mailto:${boekhouder}?subject=${onderwerp}&body=${body}`; }, 1000);
+  }
 }
 
 async function mailOfferte(offerteId){
@@ -3982,26 +4038,27 @@ async function mailOfferte(offerteId){
   if(!o) return;
   const email = o.klant_email || prompt('E-mailadres klant:', '');
   if(!email) return;
+  const S = window._bedrijfInst||{};
+  const methode = S.email_methode||'eigen';
 
-  toast('📧 Offerte wordt verstuurd...');
-  try {
-    const pdfBase64 = await genereerOffertePDFBase64(offerteId);
-    const S = window._bedrijfInst||{};
-    const bericht = `Geachte ${o.klant_naam},\n\nHierbij ontvangt u onze offerte ${o.nr}.${o.referentie?`\nReferentie: ${o.referentie}`:''}\n\nDeze offerte is geldig tot ${o.geldig_tot?new Date(o.geldig_tot).toLocaleDateString('nl-NL'):'nader overeen te komen'}.\n\nNeem gerust contact op bij vragen.\n\nMet vriendelijke groet,\n${S.naam||''}\n${S.email||''}`.trim();
-
-    await verstuurEmail({
-      type:        'offerte',
-      offerte_id:  offerteId,
-      naar_email:  email,
-      naar_naam:   o.klant_naam,
-      pdf_base64:  pdfBase64,
-      bericht,
-    });
-    // Markeer als verzonden
+  if(methode === 'brevo'){
+    toast('📧 Offerte wordt verstuurd...');
+    try {
+      const pdfBase64 = await genereerOffertePDFBase64(offerteId);
+      const bericht = `Geachte ${o.klant_naam},\n\nHierbij ontvangt u onze offerte ${o.nr}.${o.referentie?`\nReferentie: ${o.referentie}`:''}\n\nDeze offerte is geldig tot ${o.geldig_tot?new Date(o.geldig_tot).toLocaleDateString('nl-NL'):'nader overeen te komen'}.\n\nNeem gerust contact op bij vragen.\n\nMet vriendelijke groet,\n${S.naam||''}\n${S.email||''}`.trim();
+      await verstuurEmail({ type:'offerte', offerte_id:offerteId, naar_email:email, naar_naam:o.klant_naam, pdf_base64:pdfBase64, bericht });
+      await dbUpdate('offertes',`?id=eq.${offerteId}`,{status:'verzonden'});
+      await renderOffertes();
+      toast(`✅ Offerte ${o.nr} verstuurd naar ${email}`);
+    } catch(e){ toast('Fout bij verzenden: '+e.message,'err'); }
+  } else {
+    const onderwerp = encodeURIComponent(`Offerte ${o.nr} - ${S.naam||''}`);
+    const body = encodeURIComponent(`Geachte ${o.klant_naam},\n\nHierbij ontvangt u onze offerte ${o.nr}.\n\nMet vriendelijke groet,\n${S.naam||''}`);
+    await downloadOffertePDF(offerteId);
+    setTimeout(()=>{ window.location.href = `mailto:${email}?subject=${onderwerp}&body=${body}`; }, 1000);
     await dbUpdate('offertes',`?id=eq.${offerteId}`,{status:'verzonden'});
     await renderOffertes();
-    toast(`✅ Offerte ${o.nr} verstuurd naar ${email}`);
-  } catch(e){ toast('Fout bij verzenden: '+e.message,'err'); }
+  }
 }
 
 async function stuurHerinnering(factuurId){
@@ -4030,36 +4087,21 @@ async function stuurHerinnering(factuurId){
 
 // PDF genereren als base64 string (voor email bijlage)
 async function genereerPDFBase64(factuurId){
-  const f    = cachedFacturen.find(x=>x.id===factuurId);
+  const f = cachedFacturen.find(x=>x.id===factuurId);
   if(!f) throw new Error('Factuur niet gevonden');
   const regels = await dbGet('factuur_regels',`?select=*&factuur_id=eq.${factuurId}&order=id`);
-  const S    = await dbGet('bedrijven',`?select=*&id=eq.${huidigeBedrijfId}`);
+  const S = await dbGet('bedrijven',`?select=*&id=eq.${huidigeBedrijfId}`);
   const inst = Array.isArray(S)?S[0]:S;
-
-  // Tijdelijk de save methode vervangen
-  const {jsPDF} = window.jspdf;
-  const origSave = jsPDF.prototype.save;
-  let base64Result = null;
-  jsPDF.prototype.save = function(){ base64Result = this.output('datauristring'); };
-  genereerPDF(f, regels||[], inst||window._bedrijfInst||{});
-  jsPDF.prototype.save = origSave;
-  return base64Result;
+  return genereerPDF(f, regels||[], inst||window._bedrijfInst||{}, 'base64');
 }
 
 async function genereerOffertePDFBase64(offerteId){
-  const o    = cachedOffertes.find(x=>x.id===offerteId);
+  const o = cachedOffertes.find(x=>x.id===offerteId);
   if(!o) throw new Error('Offerte niet gevonden');
   const regels = await dbGet('offerte_regels',`?select=*&offerte_id=eq.${offerteId}&order=volgorde.asc`);
-  const S    = await dbGet('bedrijven',`?select=*&id=eq.${huidigeBedrijfId}`);
+  const S = await dbGet('bedrijven',`?select=*&id=eq.${huidigeBedrijfId}`);
   const inst = Array.isArray(S)?S[0]:S;
-
-  const {jsPDF} = window.jspdf;
-  const origSave = jsPDF.prototype.save;
-  let base64Result = null;
-  jsPDF.prototype.save = function(){ base64Result = this.output('datauristring'); };
-  genereerOffertePDF(o, regels||[], inst||window._bedrijfInst||{});
-  jsPDF.prototype.save = origSave;
-  return base64Result;
+  return genereerOffertePDF(o, regels||[], inst||window._bedrijfInst||{}, 'base64');
 }
 
 // ══════════════════════════════════════════════════════════
@@ -4357,7 +4399,7 @@ async function downloadOffertePDF(id){
   genereerOffertePDF(o, regels||[], Array.isArray(S)?S[0]:S||inst);
 }
 
-function genereerOffertePDF(o, regels, S){
+function genereerOffertePDF(o, regels, S, modus='download'){
   const {jsPDF}=window.jspdf;
   const doc=new jsPDF();
   const PW=210, PH=297, ML=16, MR=194, CW=MR-ML;
@@ -4494,6 +4536,7 @@ function genereerOffertePDF(o, regels, S){
   const totP=doc.internal.getNumberOfPages();
   for(let p=1;p<=totP;p++){ doc.setPage(p); addFooter(); if(totP>1){ doc.setFontSize(7); doc.setTextColor(160,160,160); doc.text(`${p} / ${totP}`,MR,PH-4.5); } }
 
+  if(modus === 'base64') return doc.output('datauristring');
   doc.save(`${o.nr}.pdf`);
 }
 
@@ -5725,8 +5768,34 @@ async function koppelMutatieAanFactuur(mutatieId){
 
 async function verwijderKasMutatie(id){
   if(!confirm('Mutatie verwijderen?')) return;
+  const mutatie = cachedKasMutaties.find(x=>x.id===id);
   await dbDelete('kas_mutaties',`?id=eq.${id}`);
-  toast('Verwijderd');
+
+  // Als mutatie gekoppeld was aan een factuur: betaalstatus terugzetten
+  if(mutatie?.referentie_id && mutatie?.bron==='factuur'){
+    const factuurId = mutatie.referentie_id;
+    // Check of er nog andere mutaties voor deze factuur zijn
+    const overige = (cachedKasMutaties||[]).filter(m=>m.id!==id && m.referentie_id===factuurId && m.bron==='factuur');
+    if(!overige.length){
+      // Geen andere betalingen meer → terug naar onbetaald
+      await dbUpdate('facturen',`?id=eq.${factuurId}`,{betaal_status:'onbetaald', betaald_bedrag:0});
+      const f = cachedFacturen.find(x=>x.id===factuurId);
+      if(f){ f.betaal_status='onbetaald'; f.betaald_bedrag=0; }
+      toast('Mutatie verwijderd — factuur teruggezet naar onbetaald');
+    } else {
+      // Herbereken betaald bedrag op basis van resterende mutaties
+      const resterendBedrag = round2(overige.reduce((a,m)=>a+(+m.bedrag||0),0));
+      const factuur = cachedFacturen.find(x=>x.id===factuurId);
+      const nieuweStatus = factuur && resterendBedrag >= +factuur.tot_incl ? 'betaald' : 'deels';
+      await dbUpdate('facturen',`?id=eq.${factuurId}`,{betaal_status: nieuweStatus, betaald_bedrag: resterendBedrag});
+      if(factuur){ factuur.betaal_status=nieuweStatus; factuur.betaald_bedrag=resterendBedrag; }
+      toast('Mutatie verwijderd — betaalstatus bijgewerkt');
+    }
+    renderBetaalStats(cachedFacturen);
+    filterFacturen();
+  } else {
+    toast('Mutatie verwijderd');
+  }
   await renderKasBank();
 }
 
