@@ -767,8 +767,11 @@ const dbAuth = createClient(SUPABASE_URL, SUPABASE_ANON, {
       </div>
       <!-- Periode filter -->
       <div class="card" style="padding:10px 16px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <span style="font-size:13px;color:var(--text3);white-space:nowrap">Periode:</span>
-        <button class="btn btn-ghost btn-sm" onclick="setFactuurPeriode('maand')">Deze maand</button>
+        <button class="btn btn-ghost btn-sm" onclick="factuurJaarStap(-1)">‹</button>
+        <span id="factuurJaarLabel" style="font-weight:700;color:var(--text1);min-width:40px;text-align:center"></span>
+        <button class="btn btn-ghost btn-sm" onclick="factuurJaarStap(1)">›</button>
+        <div style="width:1px;height:20px;background:var(--border);margin:0 2px"></div>
+        <button class="btn btn-ghost btn-sm" onclick="setFactuurPeriode('maand')">Maand</button>
         <button class="btn btn-ghost btn-sm" onclick="setFactuurPeriode('q1')">Q1</button>
         <button class="btn btn-ghost btn-sm" onclick="setFactuurPeriode('q2')">Q2</button>
         <button class="btn btn-ghost btn-sm" onclick="setFactuurPeriode('q3')">Q3</button>
@@ -855,8 +858,11 @@ const dbAuth = createClient(SUPABASE_URL, SUPABASE_ANON, {
       </div>
       <!-- Periode filter -->
       <div class="card" style="padding:10px 16px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <span style="font-size:13px;color:var(--text3);white-space:nowrap">Periode:</span>
-        <button class="btn btn-ghost btn-sm" onclick="setInkoopPeriode('maand')">Deze maand</button>
+        <button class="btn btn-ghost btn-sm" onclick="inkoopJaarStap(-1)">‹</button>
+        <span id="inkoopJaarLabel" style="font-weight:700;color:var(--text1);min-width:40px;text-align:center"></span>
+        <button class="btn btn-ghost btn-sm" onclick="inkoopJaarStap(1)">›</button>
+        <div style="width:1px;height:20px;background:var(--border);margin:0 2px"></div>
+        <button class="btn btn-ghost btn-sm" onclick="setInkoopPeriode('maand')">Maand</button>
         <button class="btn btn-ghost btn-sm" onclick="setInkoopPeriode('q1')">Q1</button>
         <button class="btn btn-ghost btn-sm" onclick="setInkoopPeriode('q2')">Q2</button>
         <button class="btn btn-ghost btn-sm" onclick="setInkoopPeriode('q3')">Q3</button>
@@ -2303,11 +2309,11 @@ function showTab(id){
   window.scrollTo(0,0);
   if(id==='instellingen') laadInstellingenFormulier();
   if(id==='dashboard')    renderDashboard();
-  if(id==='facturen')     renderFacturen();
+  if(id==='facturen')     { renderFacturen(); initPeriodeFilters(); }
   if(id==='offertes')     renderOffertes();
   if(id==='uren')         renderUren();
   if(id==='terugkerend')  renderTerugkerend();
-  if(id==='inkopen')      renderInkopen();
+  if(id==='inkopen')      { renderInkopen(); initPeriodeFilters(); }
   if(id==='kasbank')      renderKasBank();
   if(id==='resultaten')   initResultaten();
   if(id==='export')       { initExportForm(); laadBackupStats(); }
@@ -2942,15 +2948,55 @@ async function maakFactuur(){
 // ══════════════════════════════════════════════════════════
 let cachedFacturen = [];
 
+let _factuurJaar = new Date().getFullYear();
+let _inkoopJaar  = new Date().getFullYear();
+
+function initPeriodeFilters(){
+  const el1 = document.getElementById('factuurJaarLabel');
+  const el2 = document.getElementById('inkoopJaarLabel');
+  if(el1) el1.textContent = _factuurJaar;
+  if(el2) el2.textContent = _inkoopJaar;
+}
+
+function factuurJaarStap(stap){
+  _factuurJaar += stap;
+  document.getElementById('factuurJaarLabel').textContent = _factuurJaar;
+  // Bewaar huidige periode-type en pas aan op nieuw jaar
+  const van = document.getElementById('factuurVan').value;
+  const tot = document.getElementById('factuurTot').value;
+  if(van && tot){
+    // Update jaar in huidige van/tot
+    document.getElementById('factuurVan').value = van.replace(/^\d{4}/, _factuurJaar);
+    document.getElementById('factuurTot').value = tot.replace(/^\d{4}/, _factuurJaar);
+    filterFacturen();
+  }
+}
+
+function inkoopJaarStap(stap){
+  _inkoopJaar += stap;
+  document.getElementById('inkoopJaarLabel').textContent = _inkoopJaar;
+  const van = document.getElementById('inkoopVan').value;
+  const tot = document.getElementById('inkoopTot').value;
+  if(van && tot){
+    document.getElementById('inkoopVan').value = van.replace(/^\d{4}/, _inkoopJaar);
+    document.getElementById('inkoopTot').value = tot.replace(/^\d{4}/, _inkoopJaar);
+    filterInkopen();
+  }
+}
+
 function getPeriodeDatums(type){
+  return _getPeriodeDatums(type, null);
+}
+
+function _getPeriodeDatums(type, jaar){
   const nu = new Date();
-  const jaar = nu.getFullYear();
-  if(type==='maand'){ return { van: new Date(jaar, nu.getMonth(), 1).toISOString().split('T')[0], tot: nu.toISOString().split('T')[0] }; }
-  if(type==='q1')   return { van:`${jaar}-01-01`, tot:`${jaar}-03-31` };
-  if(type==='q2')   return { van:`${jaar}-04-01`, tot:`${jaar}-06-30` };
-  if(type==='q3')   return { van:`${jaar}-07-01`, tot:`${jaar}-09-30` };
-  if(type==='q4')   return { van:`${jaar}-10-01`, tot:`${jaar}-12-31` };
-  if(type==='jaar') return { van:`${jaar}-01-01`, tot:`${jaar}-12-31` };
+  const j  = jaar || nu.getFullYear();
+  if(type==='maand'){ return { van: new Date(j, nu.getMonth(), 1).toISOString().split('T')[0], tot: j===nu.getFullYear() ? nu.toISOString().split('T')[0] : `${j}-${String(nu.getMonth()+1).padStart(2,'0')}-${new Date(j,nu.getMonth()+1,0).getDate()}` }; }
+  if(type==='q1')   return { van:`${j}-01-01`, tot:`${j}-03-31` };
+  if(type==='q2')   return { van:`${j}-04-01`, tot:`${j}-06-30` };
+  if(type==='q3')   return { van:`${j}-07-01`, tot:`${j}-09-30` };
+  if(type==='q4')   return { van:`${j}-10-01`, tot:`${j}-12-31` };
+  if(type==='jaar') return { van:`${j}-01-01`, tot:`${j}-12-31` };
   return null;
 }
 
@@ -2959,7 +3005,7 @@ function setFactuurPeriode(type){
     document.getElementById('factuurVan').value = '';
     document.getElementById('factuurTot').value = '';
   } else {
-    const d = getPeriodeDatums(type);
+    const d = _getPeriodeDatums(type, _factuurJaar);
     if(d){ document.getElementById('factuurVan').value = d.van; document.getElementById('factuurTot').value = d.tot; }
   }
   filterFacturen();
@@ -2970,7 +3016,7 @@ function setInkoopPeriode(type){
     document.getElementById('inkoopVan').value = '';
     document.getElementById('inkoopTot').value = '';
   } else {
-    const d = getPeriodeDatums(type);
+    const d = _getPeriodeDatums(type, _inkoopJaar);
     if(d){ document.getElementById('inkoopVan').value = d.van; document.getElementById('inkoopTot').value = d.tot; }
   }
   filterInkopen();
