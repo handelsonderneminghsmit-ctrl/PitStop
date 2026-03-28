@@ -752,6 +752,10 @@ const dbAuth = createClient(SUPABASE_URL, SUPABASE_ANON, {
             <div class="totals-divider"></div>
             <div class="totals-row final"><span>Totaal incl. BTW</span><span id="totaal" style="min-width:90px;text-align:right">€0,00</span></div>
           </div>
+          <div class="form-group" style="margin-top:14px;width:100%">
+            <label>Notitie <span style="color:var(--text3);font-weight:400">(optioneel — verschijnt op de factuur)</span></label>
+            <textarea id="factuurNotitie" placeholder="Bijv. bedankt voor uw opdracht, of aanvullende informatie..." rows="3" style="width:100%;box-sizing:border-box"></textarea>
+          </div>
           <!-- Mobiele aanmaak knop -->
           <button class="btn btn-primary mobile-aanmaken-btn" onclick="maakFactuur()" style="width:100%;margin-top:16px;padding:14px;font-size:16px">⚡ Factuur aanmaken</button>
         </div>
@@ -3101,7 +3105,8 @@ async function maakFactuur(){
     credit_ref_nr:isCredit?document.getElementById('creditRefNr').value:null,
     credit_reden:isCredit?document.getElementById('creditReden').value:null,
     tot_excl:totExcl, tot_btw:totBtw, tot_incl:totIncl,
-    datum:new Date().toISOString().slice(0,10)
+    datum:new Date().toISOString().slice(0,10),
+    notitie: document.getElementById('factuurNotitie').value.trim()||null,
   };
 
   try {
@@ -3130,7 +3135,7 @@ async function maakFactuur(){
     inkoopAutoOpen = false;
     lines=[];
     ['klantNaam','klantAdres','klantPlaats','klantEmail','kenteken','merk','meldcode','eersteToelating',
-     'apkVervaldatum','km','vermogen','autoprijs','verkoperBsn','verkoperLegNr','creditRefNr','creditReden']
+     'apkVervaldatum','km','vermogen','autoprijs','verkoperBsn','verkoperLegNr','creditRefNr','creditReden','factuurNotitie']
       .forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
     const abt=document.getElementById('autoBtwType'); if(abt){abt.value='marge'; updateAutoprijsLabel();}
     document.getElementById('klantSelect').value='';
@@ -4193,6 +4198,17 @@ function genereerPDF(f, regels, S, modus='download'){
       doc.setFontSize(8); doc.setTextColor(110,110,110);
       doc.splitTextToSize(S.factuur_tekst, CW).forEach(l=>{ y=checkPage(y,6); doc.text(l,ML,y); y+=5; });
     }
+  }
+
+  // Notitie
+  if(f.notitie){
+    y=checkPage(y,14);
+    doc.setFillColor(clr,clg,clb); doc.rect(ML,y,CW,6,'F');
+    setLabel(); doc.text('NOTITIE', ML+3, y+4.5);
+    y+=8;
+    setBody(8.5); doc.setTextColor(40,40,40);
+    doc.splitTextToSize(f.notitie, CW-6).forEach(l=>{ y=checkPage(y,6); doc.text(l, ML+3, y); y+=5; });
+    y+=2;
   }
 
   // ════════════════════════════════
