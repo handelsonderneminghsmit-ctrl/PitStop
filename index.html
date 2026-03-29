@@ -2709,7 +2709,7 @@ function selectType(type){
   document.getElementById('klantCardTitle').textContent = isInkoop ? 'Verkoper gegevens' : 'Klantgegevens';
   if(document.getElementById('dienstFieldsTitle'))
     document.getElementById('dienstFieldsTitle').innerHTML = isInkoop
-      ? '<div class="card-title">Ingekochte goederen / regels</div>'
+      ? '<div class="card-title">Extra inkoopregels <span style="font-size:12px;color:var(--text3);font-weight:400">(optioneel — als voertuig ingevuld)</span></div>'
       : '<div class="card-title">Producten &amp; Diensten</div>';
 
   lines=[]; renderLines();
@@ -3026,16 +3026,21 @@ async function maakFactuur(){
       exclTot, btwTot, inclTot
     }, ...lines];
   } else if(isInkoop){
-    // Inkoop: regels zijn verplicht, auto velden optioneel
-    if(lines.length===0) return toast('Voeg minimaal 1 inkooppost toe','err');
-    // Als voertuig ingevuld, voeg toe als eerste regel met negatief bedrag
-    const autoprijs = +document.getElementById('autoprijs').value;
-    if(inkoopAutoOpen && autoprijs > 0){
-      const autoBtwType = document.getElementById('autoBtwType')?.value||'marge';
-      const autoBtwPerc = +(document.getElementById('autoBtwPerc')?.value||21);
-      const merk = document.getElementById('merk').value.trim();
-      const kenteken = document.getElementById('kenteken').value.trim();
-      const autoNaam = [merk, kenteken?`(${kenteken})`:''].filter(Boolean).join(' ') || 'Voertuig';
+    const autoprijs   = +document.getElementById('autoprijs').value;
+    const heeftAuto   = inkoopAutoOpen && autoprijs > 0;
+    const heeftRegels = lines.length > 0;
+
+    // Minimaal voertuig óf regels vereist
+    if(!heeftAuto && !heeftRegels) return toast('Vul een voertuigprijs in of voeg een inkooppost toe','err');
+
+    const autoBtwType = document.getElementById('autoBtwType')?.value||'marge';
+    const autoBtwPerc = +(document.getElementById('autoBtwPerc')?.value||21);
+    const merk     = document.getElementById('merk').value.trim();
+    const kenteken = document.getElementById('kenteken').value.trim();
+    const autoNaam = [merk, kenteken?`(${kenteken})`:''].filter(Boolean).join(' ') || 'Voertuig';
+
+    let autoRegel = null;
+    if(heeftAuto){
       let exclTot, btwTot, inclTot;
       if(autoBtwType==='marge'){
         exclTot=-autoprijs; btwTot=0; inclTot=-autoprijs;
@@ -3044,14 +3049,14 @@ async function maakFactuur(){
       } else {
         inclTot=-autoprijs; exclTot=-round2(autoprijs/(1+autoBtwPerc/100)); btwTot=round2(inclTot-exclTot);
       }
-      factuurLines = [{
-        naam: autoNaam, aantal:1, prijs:autoprijs,
-        btwType:autoBtwType, btwPerc:autoBtwType==='marge'?0:autoBtwPerc,
-        exclTot, btwTot, inclTot
-      }, ...lines.map(l=>({...l, exclTot:-Math.abs(l.exclTot), btwTot:-Math.abs(l.btwTot), inclTot:-Math.abs(l.inclTot)}))];
-    } else {
-      factuurLines = lines.map(l=>({...l, exclTot:-Math.abs(l.exclTot), btwTot:-Math.abs(l.btwTot), inclTot:-Math.abs(l.inclTot)}));
+      autoRegel = { naam:autoNaam, aantal:1, prijs:autoprijs, btwType:autoBtwType, btwPerc:autoBtwType==='marge'?0:autoBtwPerc, exclTot, btwTot, inclTot };
     }
+
+    const extraRegels = heeftRegels
+      ? lines.map(l=>({...l, exclTot:-Math.abs(l.exclTot), btwTot:-Math.abs(l.btwTot), inclTot:-Math.abs(l.inclTot)}))
+      : [];
+
+    factuurLines = autoRegel ? [autoRegel, ...extraRegels] : extraRegels;
   } else {
     if(lines.length===0) return toast('Voeg minimaal 1 regel toe','err');
     // Credit: maak alle bedragen negatief
